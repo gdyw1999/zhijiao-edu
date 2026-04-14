@@ -9,7 +9,9 @@
 
 ## [未发布]
 
-暂无未发布变更。
+### 变更
+- 启动脚本从 Node.js 迁移到 Python：`start_dev.py` 替代 `start-dev.js`/`start-dev.bat`/`start-dev.sh`
+- 删除旧启动脚本（3 个文件合并为 1 个）
 
 ---
 
@@ -39,9 +41,10 @@
 - `app/services/linkai.py` - LinkAI 私有化版服务封装
 
 **启动脚本更新：**
-- `start-dev.js` 现在支持自动检测后端类型（Python/Node.js）
-- 自动创建 Python 虚拟环境并安装依赖
-- 自动检测 `app/main.py` 结构并启动 uvicorn
+- `start_dev.py`（Python）替代原来的 `start-dev.js`/`start-dev.bat`/`start-dev.sh`
+- 自动检测 Python 和 Node.js 环境
+- 自动创建虚拟环境并安装依赖
+- 自动检测端口占用
 
 ### 改进
 - 配置管理：从分散的 `.env` 文件统一到项目根目录单一 `.env`

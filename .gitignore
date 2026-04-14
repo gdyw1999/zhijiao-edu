@@ -61,6 +61,12 @@ docs/智教未来-项目规划v0.5.md
 # === 工具链配置 ===
 .claude/
 .pace/
+.pace-enabled
+spec.md
+task.md
+implementation_plan.md
+walkthrough.md
+findings.md
 
 # === 旧版后端（已被 Python 替代）===
 backend-Node/

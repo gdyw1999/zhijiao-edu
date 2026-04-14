@@ -34,7 +34,7 @@
 3. **安装依赖并启动**
    ```bash
    # 使用启动脚本自动安装依赖并启动
-   node start-dev.js
+   python start_dev.py
    ```
 
    或者手动安装：
@@ -62,9 +62,7 @@
 zhijiao-edu/
 ├── .env                      # 环境变量配置（需创建）
 ├── .env.example              # 环境变量模板
-├── start-dev.js              # 跨平台启动脚本（Node.js）
-├── start-dev.sh              # Linux/macOS 快捷入口
-├── start-dev.bat             # Windows 快捷入口
+├── start_dev.py              # 跨平台启动脚本（Python）
 ├── README.md                 # 项目说明
 ├── CHANGELOG.md              # 更新日志
 │
@@ -140,32 +138,17 @@ LINKAI_WORKFLOW_ANIMATION=animation_workflow
 
 ### 启动脚本配置
 
-启动脚本 `start-dev.js` 支持以下特性：
+启动脚本 `start_dev.py` 支持以下特性：
 
-- **自动检测 Node.js 和 Python 环境**
-- **自动安装依赖**（如果虚拟环境或 node_modules 不存在）
+- **自动检测 Python 和 Node.js 环境**
+- **自动创建虚拟环境并安装依赖**
 - **自动检测端口占用**
-- **支持自定义配置文件**（通过 `--config` 参数）
-
-**自定义配置示例：**
-
-创建 `my-config.json`：
-```json
-{
-  "backend": {
-    "port": 8080,
-    "dir": "./backend"
-  },
-  "frontend": {
-    "port": 3001,
-    "dir": "./frontend"
-  }
-}
-```
+- **从 .env 文件读取端口配置**
 
 运行：
 ```bash
-node start-dev.js --config=./my-config.json
+python start_dev.py
+python start_dev.py --help   # 查看帮助
 ```
 
 ## 🛠️ 开发指南
