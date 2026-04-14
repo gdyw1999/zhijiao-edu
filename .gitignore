@@ -1,0 +1,71 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.so
+
+# Python 虚拟环境
+backend/venv/
+.venv/
+venv/
+
+# Python 环境变量
+.env
+
+# === Node.js ===
+node_modules/
+.pnp
+.pnp.*
+
+# === Next.js ===
+.next/
+out/
+
+# === IDE / 编辑器 ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === OS 生成文件 ===
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# === 日志 ===
+*.log
+logs/
+
+# === 调试 ===
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# === 证书和密钥 ===
+*.pem
+*.key
+*.crt
+
+# === TypeScript ===
+*.tsbuildinfo
+
+# === 项目内部参考资料（不入库）===
+docs/飞象web/
+docs/智教未来-项目规划v0.5.md
+
+# === 工具链配置 ===
+.claude/
+.pace/
+
+# === 旧版后端（已被 Python 替代）===
+backend-Node/
+
+# === 临时文件 ===
+*.tmp
+*.bak
+*.cache/
