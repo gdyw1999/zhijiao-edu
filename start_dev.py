@@ -19,6 +19,8 @@ import os
 import shutil
 import signal
 import time
+import threading
+from datetime import datetime
 from pathlib import Path
 
 # 当前工作目录
@@ -29,6 +31,7 @@ DEFAULT_BACKEND_PORT = 8000
 DEFAULT_FRONTEND_PORT = 3000
 BACKEND_DIR = CWD / "backend"
 FRONTEND_DIR = CWD / "frontend"
+LOGS_DIR = CWD / "logs"
 
 
 # ==================== 终端颜色 ====================
@@ -60,19 +63,40 @@ def check_command(cmd: str) -> bool:
     return shutil.which(cmd) is not None
 
 
-def check_port(port: int) -> bool:
-    """检查端口是否被占用（Windows 用 netstat，Unix 用 lsof）"""
+def get_port_pid(port: int) -> int | None:
+    """获取占用指定端口的进程 PID（仅 LISTENING 状态），未占用返回 None"""
     if sys.platform == "win32":
         result = subprocess.run(
-            f"netstat -ano | findstr :{port} ",
+            f"netstat -ano | findstr :{port} | findstr LISTENING",
             shell=True, capture_output=True, text=True,
         )
     else:
         result = subprocess.run(
-            f"lsof -i :{port} 2>/dev/null",
+            f"lsof -i :{port} -sTCP:LISTEN -t 2>/dev/null",
             shell=True, capture_output=True, text=True,
         )
-    return bool(result.stdout.strip())
+    if not result.stdout.strip():
+        return None
+    # 从输出中提取 PID（netstat 最后一列，lsof 整行就是 PID）
+    parts = result.stdout.strip().split()
+    return int(parts[-1]) if parts[-1].isdigit() else None
+
+
+def kill_process(pid: int) -> bool:
+    """终止指定 PID 的进程，成功返回 True"""
+    if sys.platform == "win32":
+        result = subprocess.run(
+            f"taskkill /PID {pid} /F /T",
+            shell=True, capture_output=True, text=True,
+        )
+        return result.returncode == 0
+    else:
+        import signal as sig
+        try:
+            os.kill(pid, sig.SIGTERM)
+            return True
+        except ProcessLookupError:
+            return False
 
 
 def get_python_cmd() -> str:
@@ -136,19 +160,21 @@ def build_config() -> dict:
 # ==================== 依赖安装 ====================
 
 def install_python_deps(backend_dir: Path) -> None:
-    """检查并安装 Python 后端依赖（创建虚拟环境 + pip install）"""
+    """检查并安装 Python 后端依赖（仅在虚拟环境不存在时安装）"""
     venv_dir = backend_dir / "venv"
     requirements = backend_dir / "requirements.txt"
 
-    # 创建虚拟环境（如果不存在）
-    if not venv_dir.exists():
-        log("  创建 Python 虚拟环境...", Color.YELLOW)
-        subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
-        log("  虚拟环境创建完成", Color.GREEN)
-    else:
-        log("  Python 虚拟环境已存在", Color.GREEN)
+    # 虚拟环境已存在则跳过安装
+    if venv_dir.exists():
+        log("  Python 虚拟环境已存在，跳过依赖安装", Color.GREEN)
+        return
 
-    # 安装依赖
+    # 创建虚拟环境
+    log("  创建 Python 虚拟环境...", Color.YELLOW)
+    subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+    log("  虚拟环境创建完成", Color.GREEN)
+
+    # 仅在首次创建时安装依赖
     if requirements.exists():
         # 根据平台确定 pip 路径
         if sys.platform == "win32":
@@ -188,6 +214,44 @@ def install_node_deps(frontend_dir: Path) -> None:
 
 # ==================== 服务启动 ====================
 
+def stream_output_with_startup(proc: subprocess.Popen, prefix: str, success_patterns: list[str], log_file: Path | None = None) -> bool:
+    """
+    单一线程处理：读取输出直到检测到启动成功标志，然后继续读取输出日志
+    同时将日志写入文件（如果提供了 log_file）
+    返回 True 表示启动成功，False 表示失败
+    """
+    startup_ok = False
+    # 打开日志文件（追加模式）
+    fh = None
+    if log_file:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        fh = open(log_file, "a", encoding="utf-8")
+        fh.write(f"\n{'='*60}\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 启动 {prefix}\n{'='*60}\n")
+        fh.flush()
+
+    try:
+        for line in proc.stdout:
+            text = line.rstrip()
+            print(f"  [{prefix}] {text}")
+            # 写入日志文件
+            if fh:
+                fh.write(f"{text}\n")
+                fh.flush()
+            # 检测启动成功标志
+            if not startup_ok:
+                for pattern in success_patterns:
+                    if pattern in line:
+                        startup_ok = True
+                        log(f"  {prefix}启动成功!", Color.GREEN)
+                        break
+    except ValueError:
+        pass
+    finally:
+        if fh:
+            fh.close()
+    return startup_ok
+
+
 def start_backend(backend_dir: Path, port: int) -> subprocess.Popen:
     """启动 Python/FastAPI 后端服务（uvicorn --reload）"""
     # 自动检测模块路径
@@ -212,12 +276,21 @@ def start_backend(backend_dir: Path, port: int) -> subprocess.Popen:
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
 
-    # 读取输出直到检测到启动成功标志
-    for line in proc.stdout:
-        print(f"  [后端] {line.rstrip()}")
-        if "Uvicorn running" in line or "Application startup complete" in line:
-            log("  后端启动成功!", Color.GREEN)
-            return proc
+    # 启动后台线程持续输出日志并检测启动成功
+    success_patterns = ["Uvicorn running", "Application startup complete"]
+    thread = threading.Thread(
+        target=stream_output_with_startup,
+        args=(proc, "后端", success_patterns, LOGS_DIR / "backend.log"),
+        daemon=True
+    )
+    thread.start()
+
+    # 等待最多 10 秒检测启动成功
+    thread.join(timeout=10)
+
+    # 检查进程是否还在运行
+    if proc.poll() is not None:
+        raise RuntimeError(f"后端进程异常退出，退出码: {proc.returncode}")
 
     return proc
 
@@ -231,12 +304,21 @@ def start_frontend(frontend_dir: Path, port: int) -> subprocess.Popen:
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
 
-    # 读取输出直到检测到启动成功标志
-    for line in proc.stdout:
-        print(f"  [前端] {line.rstrip()}")
-        if "localhost:" in line or "Local:" in line or "Ready" in line:
-            log("  前端启动成功!", Color.GREEN)
-            return proc
+    # 启动后台线程持续输出日志并检测启动成功
+    success_patterns = ["localhost:", "Local:", "Ready"]
+    thread = threading.Thread(
+        target=stream_output_with_startup,
+        args=(proc, "前端", success_patterns, LOGS_DIR / "frontend.log"),
+        daemon=True
+    )
+    thread.start()
+
+    # 等待最多 30 秒检测启动成功（Next.js 首次编译可能较慢）
+    thread.join(timeout=30)
+
+    # 检查进程是否还在运行
+    if proc.poll() is not None:
+        raise RuntimeError(f"前端进程异常退出，退出码: {proc.returncode}")
 
     return proc
 
@@ -293,22 +375,43 @@ def main() -> None:
     install_node_deps(FRONTEND_DIR)
     print()
 
-    # 检查端口占用
+    # 检查端口占用，询问用户是否终止
     for name, port in [("后端", config["backend_port"]), ("前端", config["frontend_port"])]:
-        if check_port(port):
-            log(f"  端口 {port} 已被占用，{name}可能已在运行", Color.YELLOW)
+        pid = get_port_pid(port)
+        if pid:
+            log(f"  端口 {port} 被 PID {pid} 占用（{name}）", Color.YELLOW)
+            response = input(f"  是否终止占用进程? (y/n): ")
+            if response.lower() == 'y':
+                kill_process(pid)
+                time.sleep(1)
+                if get_port_pid(port) is None:
+                    log(f"  端口 {port} 已释放", Color.GREEN)
+                else:
+                    log(f"  端口 {port} 释放失败，请手动处理", Color.RED)
+                    sys.exit(1)
+            else:
+                log(f"  用户取消启动", Color.YELLOW)
+                sys.exit(0)
     print()
 
     # 子进程引用列表，用于退出时清理
     processes: list[subprocess.Popen] = []
 
     def shutdown(signum=None, frame=None):
-        """优雅关闭所有子进程"""
+        """优雅关闭所有子进程，超时后强制 kill"""
         print()
         log("正在停止服务...", Color.YELLOW)
         for proc in processes:
             proc.terminate()
-        time.sleep(1)
+        # 等待进程退出，超时 3 秒后强制 kill
+        for _ in range(6):
+            if all(p.poll() is not None for p in processes):
+                break
+            time.sleep(0.5)
+        # 仍有未退出的进程，强制 kill
+        for proc in processes:
+            if proc.poll() is None:
+                proc.kill()
         log("服务已停止", Color.GREEN)
         sys.exit(0)
 

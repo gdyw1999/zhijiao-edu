@@ -9,9 +9,21 @@
 
 ## [未发布]
 
+### 修复
+- 修复 `generations.py` 多行字符串引号错误导致后端无法启动
+- 修复 `start_dev.py` stdout 双线程竞争导致进程泄漏和 CPU 100% 的问题
+- 修复端口占用检测误杀其他进程的问题，改为询问用户确认
+- 修复 Next.js workspace root 检测错误，配置 `outputFileTracingRoot`
+
 ### 变更
 - 启动脚本从 Node.js 迁移到 Python：`start_dev.py` 替代 `start-dev.js`/`start-dev.bat`/`start-dev.sh`
 - 删除旧启动脚本（3 个文件合并为 1 个）
+- 启动失败时显示完整错误日志，便于定位问题
+- 依赖安装仅在首次创建虚拟环境时执行，避免每次启动重复安装
+- 前后端日志同时写入 `logs/backend.log` 和 `logs/frontend.log`
+
+### 新增
+- UGC 卡片图片和头像资源本地化，不再依赖外部 CDN（unsplash、dicebear）
 
 ---
 
