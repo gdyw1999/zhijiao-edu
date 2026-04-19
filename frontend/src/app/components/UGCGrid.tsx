@@ -3,7 +3,7 @@
 import React from "react";
 import UGCCard from "./UGCCard";
 
-// 模拟UGC数据 - 匹配飞象老师UI风格
+// 模拟UGC数据 - 匹配智教未来UI风格
 const mockUGCData = [
   {
     id: "1",
@@ -59,11 +59,11 @@ const mockUGCData = [
   },
   {
     id: "5",
-    title: "飞象老师新手指引（新）",
+    title: "智教未来新手指引（新）",
     subtitle: "新手入门必读",
     image: "/images/ugc/5.jpg",
     author: {
-      name: "飞象老师1号YOYO",
+      name: "智教未来1号韩老师",
       avatar: "/images/avatars/5.svg",
     },
     heat: 5851,
@@ -73,11 +73,11 @@ const mockUGCData = [
   },
   {
     id: "6",
-    title: "飞象老师经典案例解析系列合集",
+    title: "智教未来经典案例解析系列合集",
     subtitle: "持续更新",
     image: "/images/ugc/6.jpg",
     author: {
-      name: "飞象老师1号YOYO",
+      name: "智教未来1号韩老师",
       avatar: "/images/avatars/6.svg",
     },
     heat: 5662,
