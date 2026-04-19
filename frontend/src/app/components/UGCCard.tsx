@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Flame, Eye, User } from "lucide-react";
+import { Flame, Eye } from "lucide-react";
 
 interface UGCCardProps {
   id: string;
@@ -14,7 +14,6 @@ interface UGCCardProps {
   };
   heat: number;
   tag: string;
-  category: string;
   isHot?: boolean;
 }
 
@@ -25,7 +24,6 @@ export default function UGCCard({
   author,
   heat,
   tag,
-  category,
   isHot = false,
 }: UGCCardProps) {
   // 格式化热度数字
@@ -37,13 +35,13 @@ export default function UGCCard({
   };
 
   return (
-    <div className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 cursor-pointer">
+    <article className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100">
       {/* 图片区域 */}
       <div className="relative aspect-[4/3] overflow-hidden">
         <img
           src={image}
           alt={title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          className="w-full h-full object-cover"
         />
 
         {/* 热门标签 */}
@@ -68,7 +66,7 @@ export default function UGCCard({
 
       {/* 内容区域 */}
       <div className="p-4">
-        <h3 className="font-bold text-gray-800 text-base line-clamp-2 mb-1 group-hover:text-[#0D5C3F] transition-colors">
+        <h3 className="font-bold text-gray-800 text-base line-clamp-2 mb-1">
           《{title}》{subtitle}
         </h3>
 
@@ -82,6 +80,6 @@ export default function UGCCard({
           <span className="text-sm text-gray-600 truncate">{author.name}</span>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

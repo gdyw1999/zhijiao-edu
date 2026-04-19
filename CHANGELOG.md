@@ -13,7 +13,9 @@
 - 修复 `generations.py` 多行字符串引号错误导致后端无法启动
 - 修复 `start_dev.py` stdout 双线程竞争导致进程泄漏和 CPU 100% 的问题
 - 修复端口占用检测误杀其他进程的问题，改为询问用户确认
+- 修复 Next.js 16 开发服务跨域请求被阻断的问题，配置 `allowedDevOrigins`
 - 修复 Next.js workspace root 检测错误，配置 `outputFileTracingRoot`
+- 修复占位控件（附件/图片/语音等）显示可点击光标但无实际功能的问题，改为明确禁用态
 
 ### 变更
 - 启动脚本从 Node.js 迁移到 Python：`start_dev.py` 替代 `start-dev.js`/`start-dev.bat`/`start-dev.sh`
@@ -24,6 +26,7 @@
 
 ### 新增
 - UGC 卡片图片和头像资源本地化，不再依赖外部 CDN（unsplash、dicebear）
+- GenerationResult 下载按钮改为真实 Blob 下载实现
 
 ---
 

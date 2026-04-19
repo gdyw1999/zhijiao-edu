@@ -53,8 +53,9 @@ export default function CategoryTabs({ onCategoryChange }: CategoryTabsProps) {
         {categories.map((category) => (
           <button
             key={category.id}
+            type="button"
             onClick={() => handleCategoryClick(category.id)}
-            className={`relative px-3 py-1.5 text-sm font-medium rounded-full transition-all duration-200 ${
+            className={`relative px-3 py-1.5 text-sm font-medium rounded-full cursor-pointer transition-all duration-200 ${
               activeCategory === category.id
                 ? "bg-[#0D5C3F] text-white shadow-md"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800"

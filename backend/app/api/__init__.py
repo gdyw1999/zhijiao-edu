@@ -6,8 +6,8 @@ from fastapi import APIRouter
 
 from app.api.routes import categories, chat, generations, health
 
-# 创建主 API 路由器
-router = APIRouter(prefix="/api")
+# 创建主 API 路由器（不在此处加 prefix，由 main.py 注册时统一添加 /api）
+router = APIRouter()
 
 # 注册子路由
 router.include_router(health.router, tags=["Health"])

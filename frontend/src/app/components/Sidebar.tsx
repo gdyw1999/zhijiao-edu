@@ -9,20 +9,21 @@ import {
   BookOpen,
   Clock,
   Coins,
-  Settings,
   User,
 } from "lucide-react";
 import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const menuItems = [
-  { id: "animation", label: "AI互动课件", icon: Video, active: true },
-  { id: "question", label: "AI命题", icon: FileText, active: false },
-  { id: "exam", label: "AI组题", icon: ListTodo, active: false },
-  { id: "lesson", label: "AI教案·大单元", icon: BookOpen, active: false },
+  { id: "animation", label: "AI互动课件", icon: Video, path: "/animation" },
+  { id: "question", label: "AI命题", icon: FileText, path: "/question" },
+  { id: "exam", label: "AI组题", icon: ListTodo, path: "/exam" },
+  { id: "lesson", label: "AI教案·大单元", icon: BookOpen, path: "/lesson" },
 ];
 
 export default function Sidebar() {
-  const [activeItem, setActiveItem] = useState("animation");
+  const pathname = usePathname();
   const [points] = useState(57);
 
   return (
@@ -39,7 +40,12 @@ export default function Sidebar() {
 
       {/* 新建任务按钮 */}
       <div className="p-4">
-        <button className="w-full bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-4 py-3 flex items-center gap-2 transition-colors">
+        <button
+          type="button"
+          disabled
+          title="任务管理即将上线"
+          className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 flex items-center gap-2 cursor-not-allowed opacity-70"
+        >
           <Plus className="w-5 h-5" />
           <span className="font-medium">新建任务</span>
         </button>
@@ -49,12 +55,12 @@ export default function Sidebar() {
       <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeItem === item.id;
+          const isActive = pathname === item.path;
 
           return (
-            <button
+            <Link
               key={item.id}
-              onClick={() => setActiveItem(item.id)}
+              href={item.path}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
                 isActive
                   ? "bg-white text-[#0D5C3F] font-medium shadow-lg"
@@ -63,7 +69,7 @@ export default function Sidebar() {
             >
               <Icon className={`w-5 h-5 ${isActive ? "text-[#0D5C3F]" : ""}`} />
               <span>{item.label}</span>
-            </button>
+            </Link>
           );
         })}
       </nav>

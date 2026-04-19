@@ -46,9 +46,10 @@ class Color:
     CYAN = "\033[36m"
 
 
-def log(msg: str, color: str = Color.RESET) -> None:
-    """带颜色的日志输出"""
-    print(f"{color}{msg}{Color.RESET}")
+def log(msg: str, color: str = Color.RESET, timestamp: bool = False) -> None:
+    """带颜色的日志输出（可选时间戳）"""
+    prefix = f"[{datetime.now().strftime('%H:%M:%S')}] " if timestamp else ""
+    print(f"{color}{prefix}{msg}{Color.RESET}")
 
 
 def separator() -> None:
@@ -111,6 +112,39 @@ def get_python_cmd() -> str:
 def get_npm_cmd() -> str:
     """获取可用的 npm 命令（Windows 需要带 .cmd 后缀）"""
     return "npm.cmd" if sys.platform == "win32" else "npm"
+
+
+def show_environment_info() -> None:
+    """显示环境版本信息"""
+    log("", Color.RESET)
+    separator()
+    log("  环境信息", Color.BRIGHT)
+    separator()
+
+    # Python 版本
+    log(f"  Python: {sys.version}", Color.CYAN, timestamp=True)
+
+    # Node.js 版本
+    try:
+        result = subprocess.run(
+            [get_npm_cmd(), "--version"],
+            capture_output=True, text=True, timeout=5
+        )
+        npm_version = result.stdout.strip() if result.returncode == 0 else "未知"
+        log(f"  npm: {npm_version}", Color.CYAN, timestamp=True)
+
+        # Node 版本
+        result = subprocess.run(
+            ["node", "--version"] if sys.platform != "win32" else ["node", "--version"],
+            capture_output=True, text=True, timeout=5
+        )
+        node_version = result.stdout.strip() if result.returncode == 0 else "未知"
+        log(f"  Node.js: {node_version}", Color.CYAN, timestamp=True)
+    except Exception as e:
+        log(f"  获取 Node.js/npm 版本失败: {e}", Color.YELLOW, timestamp=True)
+
+    separator()
+    log("", Color.RESET)
 
 
 # ==================== .env 配置加载 ====================
@@ -232,7 +266,8 @@ def stream_output_with_startup(proc: subprocess.Popen, prefix: str, success_patt
     try:
         for line in proc.stdout:
             text = line.rstrip()
-            print(f"  [{prefix}] {text}")
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            print(f"  [{timestamp}][{prefix}] {text}")
             # 写入日志文件
             if fh:
                 fh.write(f"{text}\n")
@@ -296,10 +331,22 @@ def start_backend(backend_dir: Path, port: int) -> subprocess.Popen:
 
 
 def start_frontend(frontend_dir: Path, port: int) -> subprocess.Popen:
-    """启动 Next.js 前端开发服务器"""
-    log(f"  启动前端 (端口: {port})...", Color.CYAN)
+    """启动 Next.js 前端开发服务器（使用 Next.js 16 默认 Turbopack）"""
+    npm_cmd = get_npm_cmd()
+
+    # 清理旧的构建缓存，避免残留污染
+    build_dir = frontend_dir / ".next"
+    if build_dir.exists():
+        log(f"  清理旧的 .next 构建缓存...", Color.YELLOW)
+        shutil.rmtree(build_dir)
+
+    log(f"  启动前端开发服务器 (端口: {port})...", Color.CYAN)
+    log(f"  提示: 使用 Next.js 16 默认 Turbopack 模式", Color.CYAN)
+
+    # Next.js 16 默认使用 Turbopack，不再需要 --webpack 标志
+    # --webpack 在 Next.js 16 中会导致客户端组件 hydration 失败（按钮不可点击）
     proc = subprocess.Popen(
-        [get_npm_cmd(), "run", "dev", "--", "--port", str(port)],
+        [npm_cmd, "run", "dev", "--", "--port", str(port)],
         cwd=str(frontend_dir),
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
@@ -313,7 +360,7 @@ def start_frontend(frontend_dir: Path, port: int) -> subprocess.Popen:
     )
     thread.start()
 
-    # 等待最多 30 秒检测启动成功（Next.js 首次编译可能较慢）
+    # 等待最多 30 秒检测启动成功（webpack 首次编译可能较慢）
     thread.join(timeout=30)
 
     # 检查进程是否还在运行
@@ -418,6 +465,9 @@ def main() -> None:
     # 注册信号处理（Ctrl+C 优雅退出）
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
+
+    # 显示环境信息
+    show_environment_info()
 
     # 启动后端
     try:
