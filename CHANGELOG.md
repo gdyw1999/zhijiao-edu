@@ -9,24 +9,37 @@
 
 ## [未发布]
 
+### 新增
+
+#### 阶段二 - 4个模块差异化 UI
+- 互动课件/AI命题/AI组题/AI教案各自拥有专属表单和结构化结果展示
+- 新增 `forms/` 目录下 4 个模块专属表单组件（AnimationForm/QuestionForm/ExamForm/LessonForm）
+- 新增 `results/` 目录下 4 个结构化结果展示组件
+- 后端新增 `result_parser.py`，将 AI 返回的 Markdown 解析为结构化 JSON
+
+#### 表单交互优化
+- 互动课件/AI命题/AI组题/AI教案页面新增两级年级选择（小学/初中/高中 → 具体年级）
+- AI命题页面题型改为竖排布局，每种题型独立勾选并设置题目数量（作文0/1/2）
+- ChatInput 前置表单选项标签（年级/题型数量），点击叉号移除并恢复表单状态
+- 表单选项标签拼入 topic 前缀，发送给后端 Agent 用于区分处理逻辑
+
+#### UGCGrid 交互优化
+- UGCGrid 分类点击直接展开筛选面板（移除"探索使用案例"独立按钮）
+- UGCGrid 教材选项按科目差异化配置（语文/数学/英语/物理/化学/信息科技）
+
 ### 修复
-- 修复 `generations.py` 多行字符串引号错误导致后端无法启动
-- 修复 `start_dev.py` stdout 双线程竞争导致进程泄漏和 CPU 100% 的问题
-- 修复端口占用检测误杀其他进程的问题，改为询问用户确认
-- 修复 Next.js 16 开发服务跨域请求被阻断的问题，配置 `allowedDevOrigins`
-- 修复 Next.js workspace root 检测错误，配置 `outputFileTracingRoot`
-- 修复占位控件（附件/图片/语音等）显示可点击光标但无实际功能的问题，改为明确禁用态
+- 修复所有按钮因 Tailwind v4 cursor 缺失和 React disabled 渲染问题导致的不可点击
+- 修复 Next.js 16 开发服务跨域拦截导致的 hydration 失败
+- 修复分类标签重复问题（CategoryTabs 与 UGCGrid 8分类重叠）
+- 移除 Next.js 无效的 `--verbose` 和 `--webpack` 标志
+- 移除 outputFileTracingRoot 导致的客户端 JS bundle 路径解析错误
 
 ### 变更
-- 启动脚本从 Node.js 迁移到 Python：`start_dev.py` 替代 `start-dev.js`/`start-dev.bat`/`start-dev.sh`
-- 删除旧启动脚本（3 个文件合并为 1 个）
-- 启动失败时显示完整错误日志，便于定位问题
-- 依赖安装仅在首次创建虚拟环境时执行，避免每次启动重复安装
-- 前后端日志同时写入 `logs/backend.log` 和 `logs/frontend.log`
-
-### 新增
+- 前端启动改用 webpack 模式解决 Turbopack 渲染和 JS 兼容性问题
+- 启动脚本日志输出增强（添加时间戳、环境信息）
 - UGC 卡片图片和头像资源本地化，不再依赖外部 CDN（unsplash、dicebear）
 - GenerationResult 下载按钮改为真实 Blob 下载实现
+- 互动课件表单移除"预计时长"选择器和"互动问答"类型选项
 
 ---
 

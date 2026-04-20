@@ -8,7 +8,7 @@
 "use client";
 
 import React from "react";
-import { Play, Clock, Target, Layers } from "lucide-react";
+import { Play, Target } from "lucide-react";
 import type { TaskResult } from "@/lib/types";
 
 interface AnimationResultProps {
@@ -21,7 +21,7 @@ export default function AnimationResult({ result }: AnimationResultProps) {
   return (
     <div className="space-y-4">
       {/* 概览信息卡片 */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-gradient-to-br from-[#0D5C3F]/5 to-[#0D5C3F]/10 rounded-xl p-4 flex items-center gap-3">
           <div className="w-10 h-10 bg-[#0D5C3F]/10 rounded-lg flex items-center justify-center">
             <Play className="w-5 h-5 text-[#0D5C3F]" />
@@ -31,15 +31,6 @@ export default function AnimationResult({ result }: AnimationResultProps) {
             <p className="text-sm font-medium text-gray-800">
               {isHtml ? "互动文件" : "脚本方案"}
             </p>
-          </div>
-        </div>
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-            <Clock className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">预计时长</p>
-            <p className="text-sm font-medium text-gray-800">按生成内容</p>
           </div>
         </div>
         <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-xl p-4 flex items-center gap-3">

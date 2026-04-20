@@ -17,42 +17,38 @@ import {
 } from "lucide-react";
 import type { AIFunction } from "@/lib/types";
 
-/** 互动课件模块的快捷标签 */
-const quickTags = [
-  { id: "animation", label: "教学动画" },
-  { id: "game", label: "教学游戏" },
-  { id: "multipage", label: "多页课件" },
-];
+interface TagItem {
+  label: string;
+  key: string;
+  value: unknown;
+}
 
 interface ChatInputProps {
   /** 当前 AI 功能类型 */
   aiFunction: AIFunction;
   /** 提交回调，由父组件（GenerationPage）调用 useGenerate */
-  onSubmit: (topic: string, requirements: string, tags: string[]) => void;
+  onSubmit: (topic: string, requirements: string) => void;
   /** 是否正在加载中 */
   isLoading?: boolean;
+  /** 前置标签列表 */
+  tags?: TagItem[];
+  /** 移除标签回调 */
+  onRemoveTag?: (tag: TagItem) => void;
 }
 
 export default function ChatInput({
   aiFunction,
   onSubmit,
   isLoading = false,
+  tags = [],
+  onRemoveTag,
 }: ChatInputProps) {
   const [topic, setTopic] = useState("");
   const [requirements, setRequirements] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-
-  const handleTagClick = (tagId: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tagId)
-        ? prev.filter((t) => t !== tagId)
-        : [...prev, tagId]
-    );
-  };
 
   const handleSubmit = () => {
     if (!topic.trim() || isLoading) return;
-    onSubmit(topic.trim(), requirements.trim(), selectedTags);
+    onSubmit(topic.trim(), requirements.trim());
   };
 
   // 根据不同模块显示不同 placeholder
@@ -69,27 +65,25 @@ export default function ChatInput({
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 mb-6">
-      {/* 已选标签 */}
-      {selectedTags.length > 0 && (
+      {/* 前置标签行 */}
+      {tags.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-3">
-          {selectedTags.map((tagId) => {
-            const tag = quickTags.find((t) => t.id === tagId);
-            return (
-              <span
-                key={tagId}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-[#0D5C3F]/10 text-[#0D5C3F] text-sm rounded-full"
+          {tags.map((tag) => (
+            <span
+              key={tag.key}
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#0D5C3F]/10 text-[#0D5C3F] rounded-full text-sm font-medium"
+            >
+              {tag.label}
+              <button
+                type="button"
+                onClick={() => onRemoveTag?.(tag)}
+                disabled={isLoading || undefined}
+                className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full hover:bg-[#0D5C3F]/20 cursor-pointer"
               >
-                {tag?.label || tagId}
-                <button
-                  type="button"
-                  onClick={() => handleTagClick(tagId)}
-                  className="hover:text-[#0D5C3F]/70 cursor-pointer"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            );
-          })}
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
         </div>
       )}
 
@@ -112,26 +106,6 @@ export default function ChatInput({
         className="w-full px-3 py-2 text-sm text-gray-600 placeholder-gray-400 border-0 focus:outline-none focus:ring-0"
         disabled={isLoading}
       />
-
-      {/* 快捷标签（仅互动课件模块显示） */}
-      {aiFunction === "animation" && (
-        <div className="flex flex-wrap items-center gap-2 mt-2 px-2">
-          {quickTags.map((tag) => (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => handleTagClick(tag.id)}
-              className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm cursor-pointer rounded-full border transition-all ${
-                selectedTags.includes(tag.id)
-                  ? "bg-[#0D5C3F] text-white border-[#0D5C3F]"
-                  : "bg-gray-50 text-gray-600 border-gray-200 hover:border-[#0D5C3F] hover:text-[#0D5C3F]"
-              }`}
-            >
-              <span>{tag.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* 底部工具栏 */}
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
