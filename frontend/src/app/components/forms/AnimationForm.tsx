@@ -11,7 +11,7 @@ import React, { useState } from "react";
 /** 动画类型选项 */
 const ANIMATION_TYPES = [
   { value: "演示动画", label: "演示动画" },
-  { value: "教学游戏", label: "教学游戏" },
+  { value: "互动游戏", label: "互动游戏" },
   { value: "多页课件", label: "多页课件" },
 ];
 

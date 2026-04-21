@@ -85,9 +85,9 @@ export default function GenerationResult({
   };
 
   return (
-    <div className="space-y-6">
-      {/* 中栏：标题 + 标签 + 摘要 */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="grid grid-cols-3 gap-6">
+      {/* 中栏：标题 + 标签 + 摘要 + 操作栏 + 追问（占 2/3） */}
+      <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         {/* 头部：标题 + 关闭按钮 */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
@@ -219,10 +219,10 @@ export default function GenerationResult({
         </div>
       </div>
 
-      {/* 右栏：HTML 文件实时预览（仅 content_type=html 时显示） */}
+      {/* 右栏：HTML 文件实时预览（仅 content_type=html 时显示，占 1/3） */}
       {isHtml && (
         <div
-          className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden ${
+          className={`col-span-1 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden ${
             isPreviewFullscreen ? "fixed inset-4 z-50" : ""
           }`}
         >
@@ -231,30 +231,31 @@ export default function GenerationResult({
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <FileText className="w-4 h-4" />
               <span className="font-medium">HTML 预览</span>
-              {result.html_url && (
-                <a
-                  href={result.html_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#0D5C3F] hover:underline flex items-center gap-1"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  新窗口打开
-                </a>
-              )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              {/* 全屏浏览按钮 */}
               <button
-              type="button"
+                type="button"
                 onClick={() => setIsPreviewFullscreen(!isPreviewFullscreen)}
-                className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-                title={isPreviewFullscreen ? "退出全屏" : "全屏预览"}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-[#0D5C3F] hover:bg-[#0D5C3F]/5 rounded-lg transition-colors"
+                title={isPreviewFullscreen ? "退出全屏" : "全屏浏览"}
               >
                 {isPreviewFullscreen ? (
-                  <Minimize2 className="w-4 h-4 text-gray-500" />
+                  <Minimize2 className="w-4 h-4" />
                 ) : (
-                  <Maximize2 className="w-4 h-4 text-gray-500" />
+                  <Maximize2 className="w-4 h-4" />
                 )}
+                <span>{isPreviewFullscreen ? "退出全屏" : "全屏浏览"}</span>
+              </button>
+              {/* 下载按钮 */}
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-[#0D5C3F] hover:bg-[#0D5C3F]/5 rounded-lg transition-colors"
+                title="下载 HTML"
+              >
+                <Download className="w-4 h-4" />
+                <span>下载</span>
               </button>
             </div>
           </div>

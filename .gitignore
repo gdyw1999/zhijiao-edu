@@ -57,6 +57,7 @@ pnpm-debug.log*
 # === 项目内部参考资料（不入库）===
 docs/飞象web/
 docs/智教未来-项目规划v0.5.md
+docs/生成中/
 
 # === 工具链配置 ===
 .claude/
@@ -70,6 +71,9 @@ findings.md
 
 # === 旧版后端（已被 Python 替代）===
 backend-Node/
+
+# === 1052/8027 Agent 工作台（不入库）===
+8027/
 
 # === 临时文件 ===
 *.tmp

@@ -1,7 +1,8 @@
 # 智教未来 - AI教育平台
 
 **智教未来** - 
-让AI助力教育，一句话生成专业课件、
+让AI助力教育，智教未来 AI 教育平台，支持 AI 互动课件、AI命题、AI组题、AI教案四种生成模式。
+前端基于 Next.js 16 + React 19 + TypeScript，后端基于 Python FastAPI，通过 LinkAI 工作流调用 AI 生成能力。
 
 
 **GitHub 仓库**: [https://github.com/gdyw1999/zhijiao-edu](https://github.com/gdyw1999/zhijiao-edu)
@@ -221,6 +222,13 @@ npm run dev   # 启动 Next.js 开发服务器
 ## 📄 许可证
 
 MIT
+---
+Copyright © 2026 LinkAI
 
 ---
+
+## 联系方式
+
+- GitHub: [@gdyw1999](https://github.com/gdyw1999)
+- Email: gdyw1999@163.com
 

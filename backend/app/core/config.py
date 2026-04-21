@@ -3,10 +3,11 @@
 从项目根目录的 .env 文件加载配置
 """
 
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -124,6 +125,38 @@ class Settings(BaseSettings):
         default="",
         description="作业批改中台 API 密钥",
     )
+
+    # ============================================
+    # 6.5. 1052 Skill 执行服务配置
+    # ============================================
+    SKILL_EXEC_URL: str = Field(
+        default="http://localhost:10053",
+        description="1052 Skill 执行服务地址",
+    )
+    SKILL_EXEC_TIMEOUT: int = Field(
+        default=300,
+        description="Skill 执行超时时间（秒）",
+    )
+    SKILL_EXEC_DEFAULT_SKILL: str = Field(
+        default="interactive-game",
+        description="未匹配学科时的默认 Skill ID",
+    )
+    SKILL_EXEC_SUBJECT_MAP: str = Field(
+        default="{}",
+        description="学科→Skill 映射表（JSON 格式，key=学科，value=skill_id）",
+    )
+
+    @property
+    def skill_exec_subject_map(self) -> Dict[str, str]:
+        """解析学科→Skill 映射表为字典"""
+        try:
+            return json.loads(self.SKILL_EXEC_SUBJECT_MAP)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    def get_skill_id_for_subject(self, subject: str) -> str:
+        """根据学科名称获取对应的 Skill ID，未匹配时返回默认值"""
+        return self.skill_exec_subject_map.get(subject, self.SKILL_EXEC_DEFAULT_SKILL)
 
     # ============================================
     # 7. 安全配置 (JWT)

@@ -29,8 +29,11 @@ CWD = Path.cwd()
 # 默认配置
 DEFAULT_BACKEND_PORT = 8000
 DEFAULT_FRONTEND_PORT = 3000
+DEFAULT_AGENT_BACKEND_PORT = 10053
+DEFAULT_AGENT_FRONTEND_PORT = 10052
 BACKEND_DIR = CWD / "backend"
 FRONTEND_DIR = CWD / "frontend"
+AGENT_DIR = CWD / "8027"
 LOGS_DIR = CWD / "logs"
 
 
@@ -183,11 +186,20 @@ def build_config() -> dict:
     frontend_port = int(
         os.environ.get("FRONTEND_PORT", env_config.get("FRONTEND_PORT", DEFAULT_FRONTEND_PORT))
     )
+    agent_backend_port = int(
+        os.environ.get("AGENT_BACKEND_PORT", env_config.get("AGENT_BACKEND_PORT", DEFAULT_AGENT_BACKEND_PORT))
+    )
+    agent_frontend_port = int(
+        os.environ.get("AGENT_FRONTEND_PORT", env_config.get("AGENT_FRONTEND_PORT", DEFAULT_AGENT_FRONTEND_PORT))
+    )
 
     return {
         "backend_port": backend_port,
         "frontend_port": frontend_port,
+        "agent_backend_port": agent_backend_port,
+        "agent_frontend_port": agent_frontend_port,
         "backend_dir": BACKEND_DIR,
+        "agent_dir": AGENT_DIR,
     }
 
 
@@ -234,16 +246,16 @@ def install_python_deps(backend_dir: Path) -> None:
         log("  未找到 requirements.txt，跳过依赖安装", Color.YELLOW)
 
 
-def install_node_deps(frontend_dir: Path) -> None:
-    """检查并安装前端 Node.js 依赖"""
+def install_node_deps(frontend_dir: Path, name: str = "前端") -> None:
+    """检查并安装 Node.js 依赖"""
     node_modules = frontend_dir / "node_modules"
 
     if not node_modules.exists():
-        log("  安装前端依赖 (npm install)...", Color.YELLOW)
+        log(f"  安装 {name} 依赖 (npm install)...", Color.YELLOW)
         subprocess.run([get_npm_cmd(), "install"], cwd=str(frontend_dir), check=True)
-        log("  前端依赖安装完成", Color.GREEN)
+        log(f"  {name} 依赖安装完成", Color.GREEN)
     else:
-        log("  前端依赖已安装", Color.GREEN)
+        log(f"  {name} 依赖已安装", Color.GREEN)
 
 
 # ==================== 服务启动 ====================
@@ -370,6 +382,63 @@ def start_frontend(frontend_dir: Path, port: int) -> subprocess.Popen:
     return proc
 
 
+def start_agent_backend(agent_dir: Path, port: int) -> subprocess.Popen:
+    """启动 8027 后端服务（Node.js / tsx）"""
+    npm_cmd = get_npm_cmd()
+    agent_backend_dir = agent_dir / "backend"
+
+    log(f"  启动 8027 后端 (端口: {port})...", Color.CYAN)
+
+    # 8027 后端使用 tsx watch 运行 TypeScript，端口硬编码在 src/index.ts
+    proc = subprocess.Popen(
+        [npm_cmd, "run", "dev"],
+        cwd=str(agent_backend_dir),
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    )
+
+    success_patterns = ["localhost", "Local:", "running", "Listening", "ready"]
+    thread = threading.Thread(
+        target=stream_output_with_startup,
+        args=(proc, "8027后端", success_patterns, LOGS_DIR / "agent-backend.log"),
+        daemon=True
+    )
+    thread.start()
+    thread.join(timeout=20)
+
+    if proc.poll() is not None:
+        raise RuntimeError(f"8027 后端进程异常退出，退出码: {proc.returncode}")
+
+    return proc
+
+
+def start_agent_frontend(agent_dir: Path, port: int) -> subprocess.Popen:
+    """启动 8027 前端服务（Vite）"""
+    npm_cmd = get_npm_cmd()
+    agent_frontend_dir = agent_dir / "frontend"
+
+    log(f"  启动 8027 前端 (端口: {port})...", Color.CYAN)
+
+    proc = subprocess.Popen(
+        [npm_cmd, "run", "dev", "--", "--port", str(port)],
+        cwd=str(agent_frontend_dir),
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    )
+
+    success_patterns = ["localhost:", "Local:", "Ready"]
+    thread = threading.Thread(
+        target=stream_output_with_startup,
+        args=(proc, "8027前端", success_patterns, LOGS_DIR / "agent-frontend.log"),
+        daemon=True
+    )
+    thread.start()
+    thread.join(timeout=20)
+
+    if proc.poll() is not None:
+        raise RuntimeError(f"8027 前端进程异常退出，退出码: {proc.returncode}")
+
+    return proc
+
+
 # ==================== 主函数 ====================
 
 def main() -> None:
@@ -389,14 +458,16 @@ def main() -> None:
         print()
         print("配置:")
         print("  通过 .env 文件或环境变量配置:")
-        print("    BACKEND_PORT   后端端口 (默认: 8000)")
-        print("    FRONTEND_PORT  前端端口 (默认: 3000)")
+        print("    BACKEND_PORT         后端端口 (默认: 8000)")
+        print("    FRONTEND_PORT        前端端口 (默认: 3000)")
+        print("    AGENT_BACKEND_PORT   8027后端端口 (默认: 10053)")
+        print("    AGENT_FRONTEND_PORT  8027前端端口 (默认: 10052)")
         return
 
     config = build_config()
 
     # 检查目录是否存在
-    for name, dir_path in [("后端", config["backend_dir"]), ("前端", FRONTEND_DIR)]:
+    for name, dir_path in [("后端", config["backend_dir"]), ("前端", FRONTEND_DIR), ("8027", config["agent_dir"])]:
         if not dir_path.exists():
             log(f"  {name}目录不存在: {dir_path}", Color.RED)
             sys.exit(1)
@@ -419,11 +490,18 @@ def main() -> None:
     # 检查并安装依赖
     log("检查依赖...", Color.CYAN)
     install_python_deps(config["backend_dir"])
-    install_node_deps(FRONTEND_DIR)
+    install_node_deps(FRONTEND_DIR, "智教前端")
+    install_node_deps(config["agent_dir"] / "frontend", "8027前端")
     print()
 
     # 检查端口占用，询问用户是否终止
-    for name, port in [("后端", config["backend_port"]), ("前端", config["frontend_port"])]:
+    all_ports = [
+        ("后端", config["backend_port"]),
+        ("前端", config["frontend_port"]),
+        ("8027后端", config["agent_backend_port"]),
+        ("8027前端", config["agent_frontend_port"]),
+    ]
+    for name, port in all_ports:
         pid = get_port_pid(port)
         if pid:
             log(f"  端口 {port} 被 PID {pid} 占用（{name}）", Color.YELLOW)
@@ -488,6 +566,28 @@ def main() -> None:
         log(f"  前端启动失败: {e}", Color.RED)
         sys.exit(1)
 
+    # 等待智教前端就绪后再启动 8027
+    time.sleep(2)
+
+    # 启动 8027 后端
+    try:
+        agent_backend_proc = start_agent_backend(config["agent_dir"], config["agent_backend_port"])
+        processes.append(agent_backend_proc)
+    except Exception as e:
+        log(f"  8027 后端启动失败: {e}", Color.RED)
+        sys.exit(1)
+
+    # 等待 8027 后端就绪
+    time.sleep(2)
+
+    # 启动 8027 前端
+    try:
+        agent_frontend_proc = start_agent_frontend(config["agent_dir"], config["agent_frontend_port"])
+        processes.append(agent_frontend_proc)
+    except Exception as e:
+        log(f"  8027 前端启动失败: {e}", Color.RED)
+        sys.exit(1)
+
     # 启动完成提示
     print()
     separator()
@@ -495,9 +595,11 @@ def main() -> None:
     separator()
     print()
     log("访问地址:", Color.BRIGHT)
-    log(f"  前端页面: http://localhost:{config['frontend_port']}", Color.CYAN)
-    log(f"  后端 API: http://localhost:{config['backend_port']}/api/health", Color.CYAN)
-    log(f"  API 文档: http://localhost:{config['backend_port']}/docs", Color.CYAN)
+    log(f"  智教前端:   http://localhost:{config['frontend_port']}", Color.CYAN)
+    log(f"  智教后端:   http://localhost:{config['backend_port']}/api/health", Color.CYAN)
+    log(f"  智教API文档: http://localhost:{config['backend_port']}/docs", Color.CYAN)
+    log(f"  8027前端:   http://localhost:{config['agent_frontend_port']}", Color.CYAN)
+    log(f"  8027后端:   http://localhost:{config['agent_backend_port']}", Color.CYAN)
     print()
     log("按 Ctrl+C 停止所有服务", Color.YELLOW)
 

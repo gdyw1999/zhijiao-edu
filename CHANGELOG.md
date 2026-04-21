@@ -11,11 +11,13 @@
 
 ### 新增
 
-#### 阶段二 - 4个模块差异化 UI
-- 互动课件/AI命题/AI组题/AI教案各自拥有专属表单和结构化结果展示
-- 新增 `forms/` 目录下 4 个模块专属表单组件（AnimationForm/QuestionForm/ExamForm/LessonForm）
-- 新增 `results/` 目录下 4 个结构化结果展示组件
-- 后端新增 `result_parser.py`，将 AI 返回的 Markdown 解析为结构化 JSON
+#### 1052 Skill 执行服务集成
+- 接入 1052-OS Skill 执行系统（LLM + Tool Calling）生成 HTML 互动课件
+- 新增 1052 受限工具集 `skill_exec.tools.ts`（仅 `skill_create_file`，限制写入路径、扩展名白名单、2MB 上限）
+- 新增 1052 `/api/skill-exec` 受限端点，Agent 循环上限 30 轮
+- 智教后端新增 `skill_exec.py` 调用封装，`POST /api/chat/generate` animation 互动游戏走 skill-exec 路径
+- `start_dev.py` 统一启动四个服务：智教后端(8000)+前端(3000)+8027后端(10053)+8027前端(10052)
+- 学科→Skill 映射表配置化（`.env` JSON 配置，config.py 解析，按学科路由）
 
 #### 表单交互优化
 - 互动课件/AI命题/AI组题/AI教案页面新增两级年级选择（小学/初中/高中 → 具体年级）
@@ -27,12 +29,26 @@
 - UGCGrid 分类点击直接展开筛选面板（移除"探索使用案例"独立按钮）
 - UGCGrid 教材选项按科目差异化配置（语文/数学/英语/物理/化学/信息科技）
 
+#### 阶段二 - 4个模块差异化 UI
+- 互动课件/AI命题/AI组题/AI教案各自拥有专属表单和结构化结果展示
+- 新增 `forms/` 目录下 4 个模块专属表单组件（AnimationForm/QuestionForm/ExamForm/LessonForm）
+- 新增 `results/` 目录下 4 个结构化结果展示组件
+- 后端新增 `result_parser.py`，将 AI 返回的 Markdown 解析为结构化 JSON
+
 ### 修复
 - 修复所有按钮因 Tailwind v4 cursor 缺失和 React disabled 渲染问题导致的不可点击
-- 修复 Next.js 16 开发服务跨域拦截导致的 hydration 失败
+- 修复 Next.js 16 开发服务跨域拦截导致的 hydration 失败（`allowedDevOrigins` 增加 `101.126.93.180`）
 - 修复分类标签重复问题（CategoryTabs 与 UGCGrid 8分类重叠）
+- 修复 AnimationResult 在 `isHtml` 时重复渲染 iframe（由 GenerationResult 右栏统一预览）
+- 修复 `animation_type` 字段值不匹配（AnimationForm "教学游戏"→"互动游戏"）
 - 移除 Next.js 无效的 `--verbose` 和 `--webpack` 标志
-- 移除 outputFileTracingRoot 导致的客户端 JS bundle 路径解析错误
+- 移除 `outputFileTracingRoot` 导致的客户端 JS bundle 路径解析错误
+
+### 修复
+- 修复 skill_exec.py `httpx.SyncClient` 笔误（应为 `httpx.Client`）
+- 修复 SSE 事件 JSON 序列化（`event.json()` 改为 `json.dumps(event.json())`）
+- 修复 SSE 流式未接通 GenerationPage（Loading 一直显示无法看到进度）
+- 修复 GenerationResult HTML 预览在内容下方而非右侧（三栏 grid 布局）
 
 ### 变更
 - 前端启动改用 webpack 模式解决 Turbopack 渲染和 JS 兼容性问题
@@ -40,6 +56,7 @@
 - UGC 卡片图片和头像资源本地化，不再依赖外部 CDN（unsplash、dicebear）
 - GenerationResult 下载按钮改为真实 Blob 下载实现
 - 互动课件表单移除"预计时长"选择器和"互动问答"类型选项
+- 品牌名称修改：UGCGrid mock 数据"飞象老师"→"智教未来"，"1号YOYO"→"1号韩老师"
 
 ---
 

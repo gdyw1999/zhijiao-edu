@@ -37,7 +37,7 @@ const FORM_MAP: Record<AIFunction, React.ComponentType<{
 };
 
 export default function GenerationPage({ aiFunction }: GenerationPageProps) {
-  const { result, error, isLoading, generate, reset } = useGenerate();
+  const { result, error, isLoading, content, roundNum, totalRounds, generate, generateStream, reset } = useGenerate();
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // 专属表单参数状态（由各 Form 组件 onChange 更新）
@@ -52,6 +52,11 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
       const grade = formParams.grade as string;
       if (gradeLevel) result.push({ label: gradeLevel, key: "grade_level", value: "" });
       if (grade) result.push({ label: grade, key: "grade", value: "" });
+    }
+
+    if (aiFunction === "animation") {
+      const animationType = formParams.animation_type as string;
+      if (animationType) result.push({ label: animationType, key: "animation_type", value: "" });
     }
 
     if (aiFunction === "question") {
@@ -85,6 +90,7 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
     setFormParams((prev) => {
       if (tag.key === "grade_level") return { ...prev, grade_level: "", grade: "" };
       if (tag.key === "grade") return { ...prev, grade: "" };
+      if (tag.key === "animation_type") return { ...prev, animation_type: "" };
       if (tag.key.startsWith("type_")) {
         const type = tag.value as string;
         const typeCounts = (prev.type_counts as Record<string, number>) || {};
@@ -117,9 +123,15 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
       };
 
       setHasSubmitted(true);
-      generate(request);
+
+      // animation 互动游戏走 SSE 流式，其他走同步
+      if (aiFunction === "animation" && formParams.animation_type === "互动游戏") {
+        generateStream(request);
+      } else {
+        generate(request);
+      }
     },
-    [aiFunction, generate, formParams, tags],
+    [aiFunction, generate, generateStream, formParams, tags],
   );
 
   // 关闭结果面板
@@ -154,15 +166,24 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
         />
       )}
 
-      {/* Loading */}
+      {/* Loading / 流式进度 */}
       {isLoading && (
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-6 text-center">
           <div className="inline-flex items-center gap-3">
             <div className="w-8 h-8 border-3 border-[#0D5C3F]/30 border-t-[#0D5C3F] rounded-full animate-spin" />
             <span className="text-gray-600 font-medium">
-              AI 正在生成内容，请稍候...
+              {content
+                ? `第 ${roundNum} 轮生成中...`
+                : roundNum > 0
+                  ? `第 ${roundNum} 轮生成中...`
+                  : "AI 正在生成内容，请稍候..."}
             </span>
           </div>
+          {content && (
+            <div className="mt-4 text-left bg-gray-50 rounded-lg p-4 max-h-48 overflow-auto">
+              <pre className="text-xs text-gray-600 whitespace-pre-wrap">{content}</pre>
+            </div>
+          )}
         </div>
       )}
 

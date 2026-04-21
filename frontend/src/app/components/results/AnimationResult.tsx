@@ -1,8 +1,8 @@
 /**
  * AnimationResult - 互动课件结构化结果展示
  *
- * 展示概览卡片 + 教学目标 + 场景列表。
- * 当 content_type=html 时，主体区域用 iframe 渲染。
+ * 展示概览卡片 + 教学目标。
+ * HTML 内容由 GenerationResult 右栏统一预览，此组件仅展示 Markdown 兜底。
  */
 
 "use client";
@@ -44,17 +44,8 @@ export default function AnimationResult({ result }: AnimationResultProps) {
         </div>
       </div>
 
-      {/* HTML 内容直接用 iframe */}
-      {isHtml ? (
-        <div className="rounded-xl overflow-hidden border border-gray-200">
-          <iframe
-            srcDoc={result.content}
-            className="w-full min-h-[400px] bg-white"
-            title="互动课件预览"
-            sandbox="allow-scripts allow-same-origin"
-          />
-        </div>
-      ) : (
+      {/* HTML 内容不在此渲染，由 GenerationResult 右栏统一预览 */}
+      {!isHtml && (
         /* Markdown 内容展示 */
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans overflow-auto max-h-[600px]">

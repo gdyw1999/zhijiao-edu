@@ -59,6 +59,106 @@ export async function submitGenerate(
 }
 
 /**
+ * SSE 事件类型（与后端 StreamEventType 对应）
+ */
+export type StreamEventType = "round_start" | "delta" | "round_end" | "done" | "error";
+
+/**
+ * SSE 流式事件数据结构
+ */
+export interface StreamEvent {
+  type: StreamEventType;
+  round_num?: number;
+  content?: string;
+  total_rounds?: number;
+  html?: string;
+  error_code?: string;
+}
+
+/**
+ * SSE 事件处理器
+ */
+export interface StreamHandlers {
+  onDelta?: (content: string, roundNum: number) => void;
+  onRoundStart?: (roundNum: number, totalRounds: number) => void;
+  onRoundEnd?: (roundNum: number) => void;
+  onDone?: (html: string) => void;
+  onError?: (message: string, code?: string) => void;
+}
+
+/**
+ * 流式调用 skill-exec 生成 HTML 互动游戏
+ *
+ * 使用 SSE（Server-Sent Events）实时接收每轮进度，
+ * 通过 ReadableStream 解析事件并回调给上层。
+ *
+ * @param params - 生成请求参数
+ * @param handlers - 事件处理器
+ */
+export async function submitGenerateStream(
+  params: GenerateRequest,
+  handlers: StreamHandlers,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/chat/generate/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const message = errorData?.detail || `请求失败 (${response.status})`;
+    throw new Error(message);
+  }
+
+  if (!response.body) {
+    throw new Error("响应体为空，无法读取流");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // 按双换行符分割，提取完整的 SSE 事件
+    const events = buffer.split("\n\n");
+    // 最后一个事件可能不完整，保留在 buffer 中
+    buffer = events.pop() || "";
+
+    for (const eventStr of events) {
+      const line = eventStr.trim();
+      if (!line.startsWith("data: ")) continue;
+
+      const data = line.slice(6); // 去掉 "data: " 前缀
+      const event: StreamEvent = JSON.parse(data);
+
+      switch (event.type) {
+        case "round_start":
+          handlers.onRoundStart?.(event.round_num ?? 0, event.total_rounds ?? 0);
+          break;
+        case "delta":
+          handlers.onDelta?.(event.content ?? "", event.round_num ?? 0);
+          break;
+        case "round_end":
+          handlers.onRoundEnd?.(event.round_num ?? 0);
+          break;
+        case "done":
+          handlers.onDone?.(event.html ?? "");
+          break;
+        case "error":
+          handlers.onError?.(event.content ?? "未知错误", event.error_code);
+          break;
+      }
+    }
+  }
+}
+
+/**
  * 获取最近的生成任务列表
  * 阶段一返回空列表，阶段三改为查数据库
  */
