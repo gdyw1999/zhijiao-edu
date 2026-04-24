@@ -44,12 +44,15 @@ interface GenerationResultProps {
   onClose?: () => void;
   /** 追问回调（可选，阶段一仅展示输入框） */
   onFollowUp?: (question: string) => void;
+  /** 流式 HTML 预览（SSE 过程中实时推送，用于 iframe 实时预览） */
+  streamingHtml?: string;
 }
 
 export default function GenerationResult({
   result,
   onClose,
   onFollowUp,
+  streamingHtml,
 }: GenerationResultProps) {
   const [followUpText, setFollowUpText] = useState("");
   const [isFollowUpLoading, setIsFollowUpLoading] = useState(false);
@@ -85,9 +88,9 @@ export default function GenerationResult({
   };
 
   return (
-    <div className="grid grid-cols-3 gap-6">
-      {/* 中栏：标题 + 标签 + 摘要 + 操作栏 + 追问（占 2/3） */}
-      <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="grid grid-cols-2 gap-6">
+      {/* 中栏：标题 + 标签 + 摘要 + 操作栏 + 追问 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         {/* 头部：标题 + 关闭按钮 */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
@@ -219,10 +222,10 @@ export default function GenerationResult({
         </div>
       </div>
 
-      {/* 右栏：HTML 文件实时预览（仅 content_type=html 时显示，占 1/3） */}
+      {/* 右栏：HTML 文件实时预览（仅 content_type=html 时显示） */}
       {isHtml && (
         <div
-          className={`col-span-1 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden ${
+          className={`flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden ${
             isPreviewFullscreen ? "fixed inset-4 z-50" : ""
           }`}
         >
@@ -262,9 +265,8 @@ export default function GenerationResult({
 
           {/* 预览 iframe */}
           <iframe
-            srcDoc={result.content}
-            className="w-full bg-white"
-            style={{ height: isPreviewFullscreen ? "calc(100% - 40px)" : "500px" }}
+            srcDoc={streamingHtml || result.content}
+            className="flex-1 w-full bg-white min-h-[400px]"
             title="HTML 实时预览"
             sandbox="allow-scripts allow-same-origin"
           />

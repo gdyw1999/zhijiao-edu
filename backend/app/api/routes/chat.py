@@ -298,6 +298,14 @@ async def _generate_stream_via_skill_exec(request: GenerateRequest, task_id: str
     logger.info(f"[STREAM] 开始流式生成: {task_id}, skill_id={skill_id}")
 
     async for event in call_skill_exec_stream(skill_id=skill_id, prompt=prompt):
+        # 调试：打印每个事件的内容摘要
+        if event.type == StreamEventType.DELTA:
+            logger.info(f"[STREAM] event delta: round={event.round_num}, content长度={len(event.content)}, 前80字={event.content[:80]!r}")
+        elif event.type == StreamEventType.ROUND_START:
+            logger.info(f"[STREAM] event round_start: round={event.round_num}, total={event.total_rounds}")
+        elif event.type == StreamEventType.ROUND_END:
+            logger.info(f"[STREAM] event round_end: round={event.round_num}")
+
         if event.type == StreamEventType.DONE:
             # 推送完成事件，包含最终 HTML
             yield f"data: {json.dumps(event.json())}\n\n"

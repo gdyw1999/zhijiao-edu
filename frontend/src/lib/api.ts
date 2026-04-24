@@ -61,7 +61,7 @@ export async function submitGenerate(
 /**
  * SSE 事件类型（与后端 StreamEventType 对应）
  */
-export type StreamEventType = "round_start" | "delta" | "round_end" | "done" | "error";
+export type StreamEventType = "round_start" | "delta" | "round_end" | "html_progress" | "done" | "error";
 
 /**
  * SSE 流式事件数据结构
@@ -82,6 +82,8 @@ export interface StreamHandlers {
   onDelta?: (content: string, roundNum: number) => void;
   onRoundStart?: (roundNum: number, totalRounds: number) => void;
   onRoundEnd?: (roundNum: number) => void;
+  /** HTML 片段进度（8027 每轮工具执行后实时推送） */
+  onHtmlProgress?: (html: string, roundNum: number) => void;
   onDone?: (html: string) => void;
   onError?: (message: string, code?: string) => void;
 }
@@ -146,6 +148,9 @@ export async function submitGenerateStream(
           break;
         case "round_end":
           handlers.onRoundEnd?.(event.round_num ?? 0);
+          break;
+        case "html_progress":
+          handlers.onHtmlProgress?.(event.html ?? "", event.round_num ?? 0);
           break;
         case "done":
           handlers.onDone?.(event.html ?? "");

@@ -24,6 +24,7 @@ class StreamEventType(str, Enum):
     ROUND_START = "round_start"       # LLM 开始新一轮
     DELTA = "delta"                  # 文本片段
     ROUND_END = "round_end"          # LLM 本轮结束
+    HTML_PROGRESS = "html_progress"  # HTML 生成进度（8027 流式专用）
     DONE = "done"                    # 全部完成
     ERROR = "error"                  # 错误
 
@@ -138,10 +139,16 @@ async def call_skill_exec_stream(
     timeout: int | None = None,
 ) -> AsyncGenerator[StreamEvent, None]:
     """
-    调用 1052 skill-exec 端点生成 HTML（流式版本）。
+    调用 1052 skill-exec/stream 端点生成 HTML（真·流式版本）。
 
-    在 thread pool 中运行阻塞的 httpx POST 请求，
-    并将 8027 返回的每轮进度实时 yield 出来。
+    使用 httpx.AsyncClient 消费 SSE 流，将 8027 返回的每条事件
+    映射为 StreamEvent 并实时 yield 出来。
+
+    8027 SSE 事件格式:
+      {type: 'delta', round, content}       → DELTA
+      {type: 'html_progress', round, html} → HTML_PROGRESS
+      {type: 'done', html, files_created}   → DONE
+      {type: 'error', error}               → ERROR
 
     Args:
         skill_id: 1052 中安装的 Skill ID
@@ -149,9 +156,9 @@ async def call_skill_exec_stream(
         timeout: HTTP 请求超时时间（秒），默认从 settings 读取
 
     Yields:
-        StreamEvent: 每轮进度事件（round_start/delta/round_end/done/error）
+        StreamEvent: 每条 SSE 事件映射后的流式事件
     """
-    url = f"{settings.SKILL_EXEC_URL}/api/skill-exec"
+    stream_url = f"{settings.SKILL_EXEC_URL}/api/skill-exec/stream"
     effective_timeout = timeout if timeout is not None else settings.SKILL_EXEC_TIMEOUT
 
     payload = {
@@ -159,44 +166,75 @@ async def call_skill_exec_stream(
         "prompt": prompt,
     }
 
-    logger.info(f"[STREAM] 启动 skill-exec 流式调用: skill_id={skill_id}, prompt 长度={len(prompt)}")
+    logger.info(f"[STREAM] 启动 skill-exec 流式调用: skill_id={skill_id}, stream_url={stream_url}")
 
     try:
-        # 在独立线程中运行阻塞的同步 httpx 调用，避免阻塞事件循环
-        loop = asyncio.get_running_loop()
+        async with httpx.AsyncClient(timeout=effective_timeout) as client:
+            async with client.stream("POST", stream_url, json=payload) as response:
+                # 8027 非 200 则抛异常
+                response.raise_for_status()
 
-        def do_request() -> dict:
-            with httpx.Client(timeout=effective_timeout) as client:
-                resp = client.post(url, json=payload)
-                resp.raise_for_status()
-                return resp.json()
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line.startswith("data: "):
+                        continue
 
-        # 在线程池中执行 HTTP 请求
-        result = await loop.run_in_executor(None, do_request)
+                    # 提取 JSON 部分（去掉 "data: " 前缀）
+                    json_str = line[6:]
+                    try:
+                        data = json.loads(json_str)
+                    except json.JSONDecodeError:
+                        logger.warning(f"[STREAM] JSON 解析失败: {json_str}")
+                        continue
 
-        if not result.get("ok"):
-            error_msg = result.get("error", "未知错误")
-            logger.error(f"[STREAM] skill-exec 业务失败: {error_msg}")
-            yield StreamEvent(
-                type=StreamEventType.ERROR,
-                content=error_msg,
-                error_code="BUSINESS_ERROR",
-            )
-            return
+                    event_type = data.get("type", "")
 
-        html = result.get("html", "")
-        files = result.get("files_created", [])
-        rounds = result.get("rounds", 0)
+                    if event_type == "delta":
+                        logger.info(f"[8027->] delta event: round={data.get('round')}, content长度={len(data.get('content', ''))}, 前50字={data.get('content', '')[:50]!r}")
+                        yield StreamEvent(
+                            type=StreamEventType.DELTA,
+                            round_num=data.get("round", 0),
+                            content=data.get("content", ""),
+                        )
 
-        logger.info(f"[STREAM] skill-exec 完成: rounds={rounds}, HTML 长度={len(html)}, 文件数={len(files)}")
+                    elif event_type == "round_start":
+                        logger.info(f"[8027->] round_start event: round={data.get('round')}, total={data.get('total_rounds')}")
+                        yield StreamEvent(
+                            type=StreamEventType.ROUND_START,
+                            round_num=data.get("round", 0),
+                            total_rounds=data.get("total_rounds", 0),
+                        )
 
-        # 推送完成事件（8027 已完成所有轮次，直接返回完整 HTML）
-        yield StreamEvent(
-            type=StreamEventType.DONE,
-            content="",
-            total_rounds=rounds,
-            html=html,
-        )
+                    elif event_type == "round_end":
+                        logger.info(f"[8027->] round_end event: round={data.get('round')}")
+                        yield StreamEvent(
+                            type=StreamEventType.ROUND_END,
+                            round_num=data.get("round", 0),
+                        )
+
+                    elif event_type == "html_progress":
+                        yield StreamEvent(
+                            type=StreamEventType.HTML_PROGRESS,
+                            round_num=data.get("round", 0),
+                            html=data.get("html", ""),
+                        )
+
+                    elif event_type == "done":
+                        yield StreamEvent(
+                            type=StreamEventType.DONE,
+                            html=data.get("html", ""),
+                            content="",
+                        )
+                        logger.info(f"[STREAM] skill-exec 流式结束，HTML 长度={len(data.get('html', ''))}")
+                        return
+
+                    elif event_type == "error":
+                        yield StreamEvent(
+                            type=StreamEventType.ERROR,
+                            content=data.get("error", "未知错误"),
+                            error_code="REMOTE_ERROR",
+                        )
+                        return
 
     except httpx.TimeoutException:
         logger.error("[STREAM] skill-exec 请求超时")
