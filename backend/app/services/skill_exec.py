@@ -190,7 +190,7 @@ async def call_skill_exec_stream(
                     event_type = data.get("type", "")
 
                     if event_type == "delta":
-                        logger.info(f"[8027->] delta event: round={data.get('round')}, content长度={len(data.get('content', ''))}, 前50字={data.get('content', '')[:50]!r}")
+                        logger.debug(f"[8027->] delta event: round={data.get('round')}, content长度={len(data.get('content', ''))}")
                         yield StreamEvent(
                             type=StreamEventType.DELTA,
                             round_num=data.get("round", 0),

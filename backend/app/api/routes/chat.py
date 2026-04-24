@@ -300,7 +300,7 @@ async def _generate_stream_via_skill_exec(request: GenerateRequest, task_id: str
     async for event in call_skill_exec_stream(skill_id=skill_id, prompt=prompt):
         # 调试：打印每个事件的内容摘要
         if event.type == StreamEventType.DELTA:
-            logger.info(f"[STREAM] event delta: round={event.round_num}, content长度={len(event.content)}, 前80字={event.content[:80]!r}")
+            logger.debug(f"[STREAM] event delta: round={event.round_num}, content长度={len(event.content)}")
         elif event.type == StreamEventType.ROUND_START:
             logger.info(f"[STREAM] event round_start: round={event.round_num}, total={event.total_rounds}")
         elif event.type == StreamEventType.ROUND_END:
