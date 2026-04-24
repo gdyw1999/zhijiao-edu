@@ -1,0 +1,12 @@
+# 用户敏感数据（配置、聊天历史、工作区等）
+data/
+
+# 依赖
+node_modules/
+
+# 构建产物
+backend/dist/
+
+# 环境变量
+.env
+.env.*
