@@ -145,6 +145,10 @@ class Settings(BaseSettings):
         default="{}",
         description="学科→Skill 映射表（JSON 格式，key=学科，value=skill_id）",
     )
+    SKILL_EXEC_ANIMATION_DEMO_SKILL: str = Field(
+        default="edu-demo-animation",
+        description="演示动画类型使用的 Skill ID（animation_type=演示动画）",
+    )
 
     @property
     def skill_exec_subject_map(self) -> Dict[str, str]:

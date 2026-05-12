@@ -300,7 +300,7 @@ def stream_output_with_startup(proc: subprocess.Popen, prefix: str, success_patt
 
 
 def start_backend(backend_dir: Path, port: int) -> subprocess.Popen:
-    """启动 Python/FastAPI 后端服务（uvicorn --reload）"""
+    """启动 Python/FastAPI 后端服务"""
     # 自动检测模块路径
     if (backend_dir / "app" / "main.py").exists():
         module = "app.main:app"
@@ -315,7 +315,11 @@ def start_backend(backend_dir: Path, port: int) -> subprocess.Popen:
     else:
         uvicorn_path = backend_dir / "venv" / "bin" / "uvicorn"
 
-    cmd = [str(uvicorn_path), module, "--host", "0.0.0.0", "--port", str(port), "--reload"]
+    # Windows 下 --reload 在部分环境会出现“端口在监听但请求卡住”的问题，
+    # 因此默认关闭；其他平台保留热重载以提升开发体验。
+    cmd = [str(uvicorn_path), module, "--host", "0.0.0.0", "--port", str(port)]
+    if sys.platform != "win32":
+        cmd.append("--reload")
 
     log(f"  启动后端 (端口: {port})...", Color.CYAN)
     proc = subprocess.Popen(
@@ -344,8 +348,6 @@ def start_backend(backend_dir: Path, port: int) -> subprocess.Popen:
 
 def start_frontend(frontend_dir: Path, port: int) -> subprocess.Popen:
     """启动 Next.js 前端开发服务器（使用 Next.js 16 默认 Turbopack）"""
-    npm_cmd = get_npm_cmd()
-
     # 清理旧的构建缓存，避免残留污染
     build_dir = frontend_dir / ".next"
     if build_dir.exists():
@@ -355,10 +357,16 @@ def start_frontend(frontend_dir: Path, port: int) -> subprocess.Popen:
     log(f"  启动前端开发服务器 (端口: {port})...", Color.CYAN)
     log(f"  提示: 使用 Next.js 16 默认 Turbopack 模式", Color.CYAN)
 
-    # Next.js 16 默认使用 Turbopack，不再需要 --webpack 标志
-    # --webpack 在 Next.js 16 中会导致客户端组件 hydration 失败（按钮不可点击）
+    # Windows + npm 参数转发在部分环境会把参数丢失成:
+    #   next dev 0.0.0.0 3000
+    # 导致被识别为“项目目录”报错。这里直接调用 next CLI，避免转发问题。
+    next_cli = (
+        frontend_dir / "node_modules" / ".bin" / "next.cmd"
+        if sys.platform == "win32"
+        else "next"
+    )
     proc = subprocess.Popen(
-        [npm_cmd, "run", "dev", "--", "--port", str(port)],
+        [str(next_cli), "dev", "--hostname", "0.0.0.0", "--port", str(port)],
         cwd=str(frontend_dir),
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )

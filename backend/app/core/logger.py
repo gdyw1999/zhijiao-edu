@@ -81,6 +81,10 @@ def setup_logging() -> logging.Logger:
     Returns:
         logging.Logger: 配置好的日志记录器
     """
+    # 重新配置标准输出为 UTF-8 编码（避免 Windows GBK 编码问题）
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
     # 创建根日志记录器
     logger = logging.getLogger("zhijiao")
     logger.setLevel(getattr(logging, settings.LOG_LEVEL.upper()))

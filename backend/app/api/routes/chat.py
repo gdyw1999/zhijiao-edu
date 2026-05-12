@@ -100,6 +100,7 @@ AI_FUNCTION_NAMES = {
 
 # 简单判断内容是否为 HTML（含互动课件/游戏标记）
 _HTML_MARKERS = ["<!DOCTYPE", "<html", "<!doctype html"]
+_SKILL_EXEC_ANIMATION_TYPES = {"互动游戏", "演示动画"}
 
 
 def _detect_content_type(content: str) -> ContentType:
@@ -168,19 +169,8 @@ async def _generate_via_skill_exec(
     生成完整的 HTML 文件，直接返回给前端 iframe 渲染。
     """
     # 构建生成 prompt：将请求参数拼接为自然语言描述
-    prompt_parts = [f"请创建一个互动游戏"]
-    if request.subject:
-        prompt_parts.append(f"学科：{request.subject}")
-    if request.grade:
-        prompt_parts.append(f"年级：{request.grade}")
-    if request.topic:
-        prompt_parts.append(f"主题/知识点：{request.topic}")
-    if request.requirements:
-        prompt_parts.append(f"具体要求：{request.requirements}")
-    prompt = "\n".join(prompt_parts)
-
-    # 根据学科查找对应的 1052 Skill ID
-    skill_id = settings.get_skill_id_for_subject(request.subject)
+    prompt = await _build_skill_exec_prompt(request)
+    skill_id = _get_skill_id_for_animation_request(request)
 
     logger.info(f"调用 1052 skill-exec: {task_id}, skill_id={skill_id}")
 
@@ -201,6 +191,31 @@ async def _generate_via_skill_exec(
         tags=[request.subject, request.grade] + request.tags,
         created_at=now,
     )
+
+
+def _get_skill_id_for_animation_request(request: GenerateRequest) -> str:
+    """根据 animation_type 选择 Skill ID。"""
+    if request.animation_type == "演示动画":
+        return settings.SKILL_EXEC_ANIMATION_DEMO_SKILL
+    return settings.get_skill_id_for_subject(request.subject)
+
+
+async def _build_skill_exec_prompt(request: GenerateRequest) -> str:
+    """将请求参数拼接为自然语言 prompt"""
+    prompt_prefix = "请创建一个互动游戏"
+    if request.animation_type == "演示动画":
+        prompt_prefix = "请创建一个教学演示动画"
+
+    prompt_parts = [prompt_prefix]
+    if request.subject:
+        prompt_parts.append(f"学科：{request.subject}")
+    if request.grade:
+        prompt_parts.append(f"年级：{request.grade}")
+    if request.topic:
+        prompt_parts.append(f"主题/知识点：{request.topic}")
+    if request.requirements:
+        prompt_parts.append(f"具体要求：{request.requirements}")
+    return "\n".join(prompt_parts)
 
 @router.post("/generate", response_model=TaskResult)
 async def generate(request: GenerateRequest):
@@ -225,10 +240,10 @@ async def generate(request: GenerateRequest):
     )
 
     try:
-        # 判断是否走 1052 skill-exec 路径（互动课件的互动游戏类型）
+        # 判断是否走 1052 skill-exec 路径（互动课件的互动游戏/演示动画类型）
         if (
             request.ai_function == AIFunction.ANIMATION
-            and request.animation_type == "互动游戏"
+            and request.animation_type in _SKILL_EXEC_ANIMATION_TYPES
         ):
             return await _generate_via_skill_exec(request, task_id, now)
 
@@ -270,21 +285,6 @@ async def generate(request: GenerateRequest):
             detail=f"互动课件生成服务调用失败: {e.message}",
         )
 
-
-async def _build_skill_exec_prompt(request: GenerateRequest) -> str:
-    """将请求参数拼接为自然语言 prompt"""
-    prompt_parts = ["请创建一个互动游戏"]
-    if request.subject:
-        prompt_parts.append(f"学科：{request.subject}")
-    if request.grade:
-        prompt_parts.append(f"年级：{request.grade}")
-    if request.topic:
-        prompt_parts.append(f"主题/知识点：{request.topic}")
-    if request.requirements:
-        prompt_parts.append(f"具体要求：{request.requirements}")
-    return "\n".join(prompt_parts)
-
-
 async def _generate_stream_via_skill_exec(request: GenerateRequest, task_id: str):
     """
     通过 1052 Skill 执行服务生成 HTML（流式版本）。
@@ -293,7 +293,7 @@ async def _generate_stream_via_skill_exec(request: GenerateRequest, task_id: str
     将每轮进度实时 yield 为 SSE 事件推送给前端。
     """
     prompt = await _build_skill_exec_prompt(request)
-    skill_id = settings.get_skill_id_for_subject(request.subject)
+    skill_id = _get_skill_id_for_animation_request(request)
 
     logger.info(f"[STREAM] 开始流式生成: {task_id}, skill_id={skill_id}")
 
@@ -335,7 +335,7 @@ async def generate_stream(request: GenerateRequest):
       - done: 全部完成，包含最终 HTML
       - error: 发生错误
 
-    仅支持 animation + 互动游戏 类型，其他类型返回 400。
+    仅支持 animation +（互动游戏/演示动画）类型，其他类型返回 400。
     """
     task_id = str(uuid.uuid4())
 
@@ -344,11 +344,14 @@ async def generate_stream(request: GenerateRequest):
         f"学科: {request.subject}, 主题: {request.topic}"
     )
 
-    # 仅支持 animation 互动游戏类型
-    if request.ai_function != AIFunction.ANIMATION or request.animation_type != "互动游戏":
+    # 仅支持 animation 的互动游戏/演示动画类型
+    if (
+        request.ai_function != AIFunction.ANIMATION
+        or request.animation_type not in _SKILL_EXEC_ANIMATION_TYPES
+    ):
         raise HTTPException(
             status_code=400,
-            detail="流式生成仅支持 animation + 互动游戏 类型",
+            detail="流式生成仅支持 animation + 互动游戏/演示动画 类型",
         )
 
     return StreamingResponse(

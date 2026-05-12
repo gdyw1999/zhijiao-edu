@@ -2,7 +2,10 @@
 
 **智教未来** - 
 让AI助力教育，智教未来 AI 教育平台，支持 AI 互动课件、AI命题、AI组题、AI教案四种生成模式。
-前端基于 Next.js 16 + React 19 + TypeScript，后端基于 Python FastAPI，通过 LinkAI 工作流调用 AI 生成能力。
+前端基于 Next.js 16 + React 19 + TypeScript，后端基于 Python FastAPI。
+当前动画能力采用双引擎：
+- LinkAI 工作流：通用生成能力
+- 8027 Skill-Exec：HTML 互动游戏/演示动画生成（支持流式）
 
 
 **GitHub 仓库**: [https://github.com/gdyw1999/zhijiao-edu](https://github.com/gdyw1999/zhijiao-edu)
@@ -56,6 +59,8 @@
    - 后端 API: http://localhost:8000
    - API 健康检查: http://localhost:8000/api/health
    - API 文档: http://localhost:8000/docs
+   - 8027 前端: http://localhost:10052
+   - 8027 后端: http://localhost:10053
 
 ## 📁 项目结构
 
@@ -117,6 +122,11 @@ zhijiao-edu/
 | `REDIS_URL` | Redis 连接字符串 | - |
 | `LINKAI_API_BASE` | LinkAI API 地址 | - |
 | `LINKAI_API_KEY` | LinkAI API 密钥 | - |
+| `SKILL_EXEC_URL` | 8027 Skill-Exec 后端地址 | `http://localhost:10053` |
+| `SKILL_EXEC_DEFAULT_SKILL` | 互动游戏默认 Skill | `interactive-game` |
+| `SKILL_EXEC_SUBJECT_MAP` | 学科到 Skill 的 JSON 映射 | `{}` |
+| `SKILL_EXEC_ANIMATION_DEMO_SKILL` | 演示动画 Skill ID | `edu-demo-animation` |
+| `SKILL_EXEC_MAX_CONCURRENCY` | 8027 Skill-Exec 最大并发数 | `5` |
 | `JWT_SECRET` | JWT 签名密钥 | - |
 
 ### LinkAI 四大功能工作流配置
@@ -151,6 +161,12 @@ LINKAI_WORKFLOW_ANIMATION=animation_workflow
 python start_dev.py
 python start_dev.py --help   # 查看帮助
 ```
+
+### 单端口对外访问（FRP）
+
+- 推荐只暴露前端端口（例如 `3000`），外部统一访问 Next.js。
+- 前端通过同源 `/api` 代理后端，并由 `app/api/chat/generate/stream/route.ts` 转发 SSE 到 `127.0.0.1:8000`。
+- 这样可以避免跨域和反向代理吞 SSE 的问题，满足“只开 1 个外网端口”。
 
 ## 🛠️ 开发指南
 
@@ -187,23 +203,25 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ```bash
 cd frontend
-npm run dev   # 启动 Next.js 开发服务器
+npm run dev -- --hostname=0.0.0.0 --port=3000   # 启动 Next.js 开发服务器
 ```
 
+注意：不要使用 `npm run dev -- --hostname 0.0.0.0 --port 3000`，该写法在当前脚本下可能触发 Next 参数解析问题。
+
 **技术栈：**
-- Next.js 14
-- React 18
+- Next.js 16
+- React 19
 - TypeScript
-- Tailwind CSS
+- Tailwind CSS 4
 - Lucide Icons
 
 ## 📊 技术栈总览
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
-| 前端框架 | Next.js | 14.x |
+| 前端框架 | Next.js | 16.x |
 | 前端语言 | TypeScript | 5.x |
-| 前端样式 | Tailwind CSS | 3.x |
+| 前端样式 | Tailwind CSS | 4.x |
 | 后端框架 | FastAPI | 0.109.x |
 | 后端语言 | Python | 3.8+ |
 | ASGI 服务器 | Uvicorn | 0.27.x |
@@ -231,4 +249,3 @@ Copyright © 2026 LinkAI
 
 - GitHub: [@gdyw1999](https://github.com/gdyw1999)
 - Email: gdyw1999@163.com
-

@@ -11,6 +11,47 @@
 
 ### 新增
 
+#### 演示动画 Skill 接入（8027）
+- 新增 `edu-demo-animation` 技能目录与模板：
+  - `8027/data/skills/edu-demo-animation/SKILL.md`
+  - `8027/data/skills/edu-demo-animation/TEMPLATE.md`
+- 后端 `chat` 路由新增 `animation_type=演示动画` 分支，走 8027 skill-exec。
+- 演示动画与互动游戏使用不同提示词前缀：
+  - 演示动画：`请创建一个教学演示动画`
+  - 互动游戏：`请创建一个互动游戏`
+- 新增配置项 `SKILL_EXEC_ANIMATION_DEMO_SKILL`（默认 `edu-demo-animation`）。
+
+#### 8027 并发控制
+- 8027 skill-exec 增加并发上限与请求排队机制（普通接口与流式接口都生效）。
+- 默认并发上限调整为 `5`（可通过 `SKILL_EXEC_MAX_CONCURRENCY` 覆盖）。
+- 生成目录改为 `时间戳 + UUID`，降低并发同名冲突风险。
+
+#### 对话流式UI增强
+- 流式对话UI改造（消息气泡+固定输入栏+打字机效果+SSE实时追加）
+- TypewriterText 逐字打字机效果组件
+- ThinkingBlock 思考过程可展开/折叠卡片
+- 工具调用/思考过程使用 `[[TOOL:]]`/`[[THINK:]]` 标记识别，展示为独立可展开卡片
+- 思考过程流式展开+HTML代码块过滤不污染聊天窗口
+
+#### 8027真流式改造
+- 8027 skill-exec/stream 改用 chatCompletionStream 逐token推送（原71秒等待后一次性返回369字符）
+- 8027 Agent 循环真流式输出，LLM思考期间即可看到逐字输出
+- HTML预览栏grid-cols-2右栏占半屏，实时显示生成进度
+
+#### HTML预览交互增强
+- HTML预览栏新增"新窗口"和"下载"按钮
+- 扩展iframe sandbox权限支持游戏交互（allow-forms allow-popups allow-modals）
+- 移除allow-same-origin修复内联onclick事件处理函数
+
+#### 外网访问支持
+- Next.js 添加 `--hostname 0.0.0.0` 参数绑定所有网络接口
+- 前端API请求改用相对路径 `/api`，Next.js rewrites 代理到后端
+- API代理目标改为 `127.0.0.1:8000` 修复502 Bad Gateway错误
+
+#### 8027思考标签解析
+- 前端onDelta识别 `<think/>` 标签解析思考内容
+- Skill模板添加JS字符串编码规范（必须用单引号分隔）
+
 #### 1052 Skill 执行服务集成
 - 接入 1052-OS Skill 执行系统（LLM + Tool Calling）生成 HTML 互动课件
 - 新增 1052 受限工具集 `skill_exec.tools.ts`（仅 `skill_create_file`，限制写入路径、扩展名白名单、2MB 上限）
@@ -36,6 +77,13 @@
 - 后端新增 `result_parser.py`，将 AI 返回的 Markdown 解析为结构化 JSON
 
 ### 修复
+- 修复 FRP 单端口场景下 SSE 事件前端不消费的问题：流式接口回归同源 `/api` 代理并通过 Next route handler 透传。
+- 修复前端 SSE 解析对 CRLF 与尾包处理不稳导致的“生成中卡住”问题。
+- 修复移动端布局问题：新增顶部汉堡按钮 + 抽屉侧栏，保留菜单同时避免侧边栏挤占主区。
+- 修复输入区重复：移除多余输入框，仅保留一个输入栏。
+- 修复 Windows 控制台 GBK 编码问题（sys.stdout.reconfigure UTF-8，支持emoji日志）
+- 修复 Next.js API 代理 502 错误（localhost 改为 127.0.0.1）
+- 修复多轮思考内容不显示（inThinkingRef 状态重置）
 - 修复所有按钮因 Tailwind v4 cursor 缺失和 React disabled 渲染问题导致的不可点击
 - 修复 Next.js 16 开发服务跨域拦截导致的 hydration 失败（`allowedDevOrigins` 增加 `101.126.93.180`）
 - 修复分类标签重复问题（CategoryTabs 与 UGCGrid 8分类重叠）

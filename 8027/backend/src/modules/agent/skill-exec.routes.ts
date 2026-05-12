@@ -23,6 +23,28 @@ export const skillExecRouter = Router()
 
 // Agent 循环上限
 const MAX_TOOL_ROUNDS = 30
+const MAX_CONCURRENT_SKILL_EXEC = Math.max(1, config.skillExecMaxConcurrency)
+
+let activeSkillExecJobs = 0
+const skillExecWaitQueue: Array<() => void> = []
+
+async function acquireSkillExecSlot(): Promise<void> {
+  if (activeSkillExecJobs < MAX_CONCURRENT_SKILL_EXEC) {
+    activeSkillExecJobs += 1
+    return
+  }
+
+  await new Promise<void>((resolve) => {
+    skillExecWaitQueue.push(resolve)
+  })
+  activeSkillExecJobs += 1
+}
+
+function releaseSkillExecSlot(): void {
+  activeSkillExecJobs = Math.max(0, activeSkillExecJobs - 1)
+  const next = skillExecWaitQueue.shift()
+  if (next) next()
+}
 
 /**
  * 加载指定 skill 的 SKILL.md 内容
@@ -175,30 +197,36 @@ skillExecRouter.post('/', async (req: Request, res: Response) => {
     return
   }
 
-  // 加载 skill prompt
-  console.log('[skill-exec] 加载 skill prompt:', skill_id)
-  const skillBody = await loadSkillPrompt(skill_id)
-  console.log('[skill-exec] skill prompt 加载成功，长度:', skillBody.length)
+  await acquireSkillExecSlot()
+  console.log(
+    `[skill-exec] 并发状态: active=${activeSkillExecJobs}/${MAX_CONCURRENT_SKILL_EXEC}, queued=${skillExecWaitQueue.length}`,
+  )
 
-  // 获取 LLM 配置
-  const settings = await getSettings()
-  console.log('[skill-exec] LLM 配置:', { baseUrl: settings.llm.baseUrl, modelId: settings.llm.modelId, apiKeySet: !!settings.llm.apiKey })
-  if (!settings.llm.baseUrl || !settings.llm.modelId || !settings.llm.apiKey) {
-    res.status(400).json({ error: 'LLM 未配置，请在设置页配置 baseUrl/modelId/apiKey' })
-    return
-  }
+  try {
+    // 加载 skill prompt
+    console.log('[skill-exec] 加载 skill prompt:', skill_id)
+    const skillBody = await loadSkillPrompt(skill_id)
+    console.log('[skill-exec] skill prompt 加载成功，长度:', skillBody.length)
 
-  // 创建本次生成的独立目录
-  const generatedDir = createGeneratedDir()
-  console.log('[skill-exec] 生成目录:', generatedDir)
-  await fs.mkdir(generatedDir, { recursive: true })
+    // 获取 LLM 配置
+    const settings = await getSettings()
+    console.log('[skill-exec] LLM 配置:', { baseUrl: settings.llm.baseUrl, modelId: settings.llm.modelId, apiKeySet: !!settings.llm.apiKey })
+    if (!settings.llm.baseUrl || !settings.llm.modelId || !settings.llm.apiKey) {
+      res.status(400).json({ error: 'LLM 未配置，请在设置页配置 baseUrl/modelId/apiKey' })
+      return
+    }
 
-  // 构建受限工具
-  const { tools, definitions } = buildSkillExecTools(generatedDir)
-  console.log('[skill-exec] 受限工具已构建，工具数:', definitions.length)
+    // 创建本次生成的独立目录
+    const generatedDir = createGeneratedDir()
+    console.log('[skill-exec] 生成目录:', generatedDir)
+    await fs.mkdir(generatedDir, { recursive: true })
 
-  // 构建消息：skill prompt 作为 system prompt + 运行时时间 + 用户 prompt
-  const messages: LLMConversationMessage[] = [
+    // 构建受限工具
+    const { tools, definitions } = buildSkillExecTools(generatedDir)
+    console.log('[skill-exec] 受限工具已构建，工具数:', definitions.length)
+
+    // 构建消息：skill prompt 作为 system prompt + 运行时时间 + 用户 prompt
+    const messages: LLMConversationMessage[] = [
     {
       role: 'system',
       content: [
@@ -213,10 +241,10 @@ skillExecRouter.post('/', async (req: Request, res: Response) => {
     { role: 'user', content: prompt },
   ]
 
-  console.log('[skill-exec] 开始 Agent 循环，最大轮次:', MAX_TOOL_ROUNDS)
+    console.log('[skill-exec] 开始 Agent 循环，最大轮次:', MAX_TOOL_ROUNDS)
 
-  // Agent 循环：LLM 调用 → 工具执行 → 下一轮
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    // Agent 循环：LLM 调用 → 工具执行 → 下一轮
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     console.log(`[skill-exec] 第 ${round + 1} 轮: 发送请求到 LLM...`)
     const response = await chatCompletion(settings.llm, messages, definitions)
     console.log(`[skill-exec] 第 ${round + 1} 轮: LLM 响应，toolCalls 数量: ${response.toolCalls.length}`)
@@ -253,27 +281,30 @@ skillExecRouter.post('/', async (req: Request, res: Response) => {
     messages.push(...toolMessages)
   }
 
-  // 收集生成的 HTML 文件
-  console.log('[skill-exec] 收集生成的 HTML 文件，目录:', generatedDir)
-  const { html, files: filesCreated } = await collectGeneratedHtml(generatedDir)
-  console.log('[skill-exec] 收集完成，文件列表:', filesCreated, 'HTML 长度:', html.length)
+    // 收集生成的 HTML 文件
+    console.log('[skill-exec] 收集生成的 HTML 文件，目录:', generatedDir)
+    const { html, files: filesCreated } = await collectGeneratedHtml(generatedDir)
+    console.log('[skill-exec] 收集完成，文件列表:', filesCreated, 'HTML 长度:', html.length)
 
-  if (!html) {
-    console.error('[skill-exec] 错误: LLM 未生成任何 HTML 文件')
-    res.status(500).json({
-      ok: false,
-      error: 'LLM 未生成任何 HTML 文件',
+    if (!html) {
+      console.error('[skill-exec] 错误: LLM 未生成任何 HTML 文件')
+      res.status(500).json({
+        ok: false,
+        error: 'LLM 未生成任何 HTML 文件',
+        files_created: filesCreated,
+      })
+      return
+    }
+
+    console.log('[skill-exec] 返回成功，HTML 长度:', html.length)
+    res.json({
+      ok: true,
+      html,
       files_created: filesCreated,
     })
-    return
+  } finally {
+    releaseSkillExecSlot()
   }
-
-  console.log('[skill-exec] 返回成功，HTML 长度:', html.length)
-  res.json({
-    ok: true,
-    html,
-    files_created: filesCreated,
-  })
 })
 
 /**
@@ -301,6 +332,11 @@ skillExecRouter.post('/stream', async (req: Request, res: Response) => {
     res.status(400).json({ error: '缺少 prompt 参数' })
     return
   }
+
+  await acquireSkillExecSlot()
+  console.log(
+    `[skill-exec/stream] 并发状态: active=${activeSkillExecJobs}/${MAX_CONCURRENT_SKILL_EXEC}, queued=${skillExecWaitQueue.length}`,
+  )
 
   // 设置 SSE 响应头
   res.setHeader('Content-Type', 'text/event-stream')
@@ -453,5 +489,7 @@ skillExecRouter.post('/stream', async (req: Request, res: Response) => {
     console.error('[skill-exec/stream] 错误:', message)
     sendEvent({ type: 'error', error: message })
     res.end()
+  } finally {
+    releaseSkillExecSlot()
   }
 })

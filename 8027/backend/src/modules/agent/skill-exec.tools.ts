@@ -11,6 +11,7 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { config } from '../../config.js'
 import { HttpError } from '../../http-error.js'
 import type { AgentTool } from './agent.tool.types.js'
@@ -27,7 +28,8 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024
  * 格式：data/generated/{timestamp}/
  */
 export function createGeneratedDir(): string {
-  const dir = path.join(config.dataDir, 'generated', String(Date.now()))
+  const requestId = randomUUID().replace(/-/g, '').slice(0, 12)
+  const dir = path.join(config.dataDir, 'generated', `${Date.now()}-${requestId}`)
   return dir
 }
 

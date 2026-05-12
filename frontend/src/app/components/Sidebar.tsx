@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 
 const menuItems = [
   { id: "animation", label: "AI互动课件", icon: Video, path: "/animation" },
@@ -22,19 +23,32 @@ const menuItems = [
   { id: "lesson", label: "AI教案·大单元", icon: BookOpen, path: "/lesson" },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  className?: string;
+  onNavigate?: () => void;
+  headerExtra?: ReactNode;
+}
+
+export default function Sidebar({
+  className = "hidden md:flex",
+  onNavigate,
+  headerExtra,
+}: SidebarProps) {
   const pathname = usePathname();
   const [points] = useState(57);
 
   return (
-    <aside className="w-64 bg-[#0D5C3F] text-white h-screen flex flex-col flex-shrink-0">
+    <aside className={`${className} w-64 bg-[#0D5C3F] text-white h-screen flex-col flex-shrink-0`}>
       {/* Logo区域 */}
       <div className="p-4 border-b border-[#1a7a5a]">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
-            <BookOpen className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-lg font-bold">智教未来</span>
           </div>
-          <span className="text-lg font-bold">智教未来</span>
+          {headerExtra}
         </div>
       </div>
 
@@ -61,6 +75,7 @@ export default function Sidebar() {
             <Link
               key={item.id}
               href={item.path}
+              onClick={onNavigate}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
                 isActive
                   ? "bg-white text-[#0D5C3F] font-medium shadow-lg"
