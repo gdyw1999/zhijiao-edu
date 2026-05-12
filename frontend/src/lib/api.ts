@@ -86,6 +86,8 @@ export interface StreamHandlers {
   onHtmlProgress?: (html: string, roundNum: number) => void;
   onDone?: (html: string) => void;
   onError?: (message: string, code?: string) => void;
+  /** 原始流片段调试 */
+  onRawChunk?: (chunk: string) => void;
 }
 
 /**
@@ -121,11 +123,58 @@ export async function submitGenerateStream(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  const handleEventBlock = (eventStr: string) => {
+    const line = eventStr.trim();
+    if (!line.startsWith("data: ")) return;
+
+    const data = line.slice(6); // 去掉 "data: " 前缀
+    let event: StreamEvent;
+    try {
+      event = JSON.parse(data) as StreamEvent;
+    } catch {
+      handlers.onError?.("流式事件解析失败");
+      return;
+    }
+
+    switch (event.type) {
+      case "round_start":
+        console.debug("[SSE] round_start", { round: event.round_num, total: event.total_rounds });
+        handlers.onRoundStart?.(event.round_num ?? 0, event.total_rounds ?? 0);
+        break;
+      case "delta":
+        console.debug("[SSE] delta", { round: event.round_num, length: (event.content ?? "").length });
+        handlers.onDelta?.(event.content ?? "", event.round_num ?? 0);
+        break;
+      case "round_end":
+        console.debug("[SSE] round_end", { round: event.round_num });
+        handlers.onRoundEnd?.(event.round_num ?? 0);
+        break;
+      case "html_progress":
+        console.debug("[SSE] html_progress", { round: event.round_num, htmlLength: (event.html ?? "").length });
+        handlers.onHtmlProgress?.(event.html ?? "", event.round_num ?? 0);
+        break;
+      case "done":
+        console.debug("[SSE] done", { htmlLength: (event.html ?? "").length });
+        handlers.onDone?.(event.html ?? "");
+        break;
+      case "error":
+        console.debug("[SSE] error", { code: event.error_code, message: event.content });
+        handlers.onError?.(event.content ?? "未知错误", event.error_code);
+        break;
+      default:
+        break;
+    }
+  };
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
+    const rawChunk = decoder.decode(value, { stream: true });
+    handlers.onRawChunk?.(rawChunk);
+    buffer += rawChunk;
+    // 兼容某些代理/平台将 SSE 换行转换为 CRLF
+    buffer = buffer.replace(/\r\n/g, "\n");
 
     // 按双换行符分割，提取完整的 SSE 事件
     const events = buffer.split("\n\n");
@@ -133,33 +182,13 @@ export async function submitGenerateStream(
     buffer = events.pop() || "";
 
     for (const eventStr of events) {
-      const line = eventStr.trim();
-      if (!line.startsWith("data: ")) continue;
-
-      const data = line.slice(6); // 去掉 "data: " 前缀
-      const event: StreamEvent = JSON.parse(data);
-
-      switch (event.type) {
-        case "round_start":
-          handlers.onRoundStart?.(event.round_num ?? 0, event.total_rounds ?? 0);
-          break;
-        case "delta":
-          handlers.onDelta?.(event.content ?? "", event.round_num ?? 0);
-          break;
-        case "round_end":
-          handlers.onRoundEnd?.(event.round_num ?? 0);
-          break;
-        case "html_progress":
-          handlers.onHtmlProgress?.(event.html ?? "", event.round_num ?? 0);
-          break;
-        case "done":
-          handlers.onDone?.(event.html ?? "");
-          break;
-        case "error":
-          handlers.onError?.(event.content ?? "未知错误", event.error_code);
-          break;
-      }
+      handleEventBlock(eventStr);
     }
+  }
+
+  // 处理流结束时残留在 buffer 的最后一条事件（可能没有 \n\n 终止符）
+  if (buffer.trim()) {
+    handleEventBlock(buffer);
   }
 }
 

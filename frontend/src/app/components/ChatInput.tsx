@@ -44,11 +44,10 @@ export default function ChatInput({
   onRemoveTag,
 }: ChatInputProps) {
   const [topic, setTopic] = useState("");
-  const [requirements, setRequirements] = useState("");
 
   const handleSubmit = () => {
     if (!topic.trim() || isLoading) return;
-    onSubmit(topic.trim(), requirements.trim());
+    onSubmit(topic.trim(), "");
   };
 
   // 根据不同模块显示不同 placeholder
@@ -94,16 +93,6 @@ export default function ChatInput({
         placeholder={placeholders[aiFunction]}
         className="w-full min-h-[60px] max-h-[200px] p-3 text-gray-700 placeholder-gray-400 border-0 resize-none focus:outline-none focus:ring-0"
         rows={2}
-        disabled={isLoading}
-      />
-
-      {/* 补充要求输入框（折叠显示） */}
-      <input
-        type="text"
-        value={requirements}
-        onChange={(e) => setRequirements(e.target.value)}
-        placeholder="补充要求（可选）：如难度、课时数等"
-        className="w-full px-3 py-2 text-sm text-gray-600 placeholder-gray-400 border-0 focus:outline-none focus:ring-0"
         disabled={isLoading}
       />
 

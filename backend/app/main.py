@@ -22,11 +22,11 @@ from app.core.logger import logger
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
-    logger.info(f"🚀 智教未来 API 启动 - 环境: {settings.ENVIRONMENT}")
-    logger.info(f"📡 服务地址: http://{settings.HOST}:{settings.PORT}")
+    logger.info(f"智教未来 API 启动 - 环境: {settings.ENVIRONMENT}")
+    logger.info(f"服务地址: http://{settings.HOST}:{settings.PORT}")
     yield
     # 关闭时执行
-    logger.info("👋 智教未来 API 关闭")
+    logger.info("智教未来 API 关闭")
 
 
 def create_app() -> FastAPI:
@@ -74,7 +74,7 @@ def register_middlewares(app: FastAPI):
 
         # 记录请求
         logger.info(
-            f"📥 {request.method} {request.url.path}",
+            f"{request.method} {request.url.path}",
             extra={
                 "client": request.client.host if request.client else "unknown",
                 "user_agent": request.headers.get("user-agent", "unknown"),
@@ -89,7 +89,7 @@ def register_middlewares(app: FastAPI):
 
         # 记录响应
         logger.info(
-            f"📤 {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)",
+            f"{request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)",
             extra={
                 "status_code": response.status_code,
                 "process_time": process_time,
@@ -134,7 +134,7 @@ def register_exception_handlers(app: FastAPI):
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        logger.error(f"❌ 未处理异常: {exc}", exc_info=True)
+        logger.error(f"未处理异常: {exc}", exc_info=True)
         return JSONResponse(
             status_code=500,
             content={

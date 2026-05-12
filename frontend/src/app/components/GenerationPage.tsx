@@ -8,7 +8,7 @@
 
 "use client";
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import Header from "./Header";
 import ChatInput from "./ChatInput";
 import ChatMessages, { type ChatMessage } from "./ChatMessages";
@@ -53,6 +53,10 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
   const [htmlPreviewCollapsed, setHtmlPreviewCollapsed] = useState(false);
   // 当前轮次
   const [roundNum, setRoundNum] = useState(0);
+  const [sseDebug, setSseDebug] = useState("尚未收到 SSE 事件");
+  const [sseRawPreview, setSseRawPreview] = useState("");
+  // 8027 <think/> 思考模式跟踪
+  const inThinkingRef = useRef(false);
 
   // 专属表单参数状态（由各 Form 组件 onChange 更新）
   const [formParams, setFormParams] = useState<Record<string, unknown>>({});
@@ -150,6 +154,8 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
 
         generateStream(request, {
           onRoundStart: (round) => {
+            setSseDebug(`round_start round=${round}`);
+            inThinkingRef.current = false;
             setRoundNum(round);
             setHtmlPreviewCollapsed(false);
             setMessages((prev) => {
@@ -163,13 +169,45 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
             });
           },
           onDelta: (contentDelta) => {
+            setSseDebug(`delta len=${contentDelta.length}`);
             setMessages((prev) => {
               const idx = prev.length - 1;
               if (idx >= 0 && prev[idx].role === "assistant") {
                 const msg = prev[idx];
                 let currentThink = msg.thinkContent || "";
-                // 去掉<think>\n...\n<\/plan> 和 [[THINK:...]]，提取思考内容
-                let remaining = contentDelta
+                let remaining = contentDelta;
+
+                // 处理 8027 think 标签格式的思考内容
+                if (inThinkingRef.current) {
+                  const closeIdx = remaining.indexOf("</think");
+                  if (closeIdx >= 0) {
+                    currentThink += remaining.substring(0, closeIdx);
+                    remaining = remaining.substring(closeIdx + 8);
+                    inThinkingRef.current = false;
+                  } else {
+                    currentThink += remaining;
+                    remaining = "";
+                  }
+                }
+                if (!inThinkingRef.current) {
+                  const openIdx = remaining.indexOf("<think");
+                  if (openIdx >= 0) {
+                    const beforeThink = remaining.substring(0, openIdx);
+                    remaining = remaining.substring(openIdx + 7);
+                    const closeIdx = remaining.indexOf("</think");
+                    if (closeIdx >= 0) {
+                      currentThink += remaining.substring(0, closeIdx);
+                      remaining = beforeThink + remaining.substring(closeIdx + 8);
+                    } else {
+                      currentThink += remaining;
+                      remaining = beforeThink;
+                      inThinkingRef.current = true;
+                    }
+                  }
+                }
+
+                // 兼容旧格式
+                remaining = remaining
                   .replace(/<plan>([\s\S]*?)<\/plan>/g, (m, inner) => {
                     currentThink += inner.trim() + "\n";
                     return "";
@@ -192,12 +230,15 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
             });
           },
           onRoundEnd: (round) => {
+            setSseDebug(`round_end round=${round}`);
             setRoundNum(round);
           },
           onHtmlProgress: (htmlFragment) => {
+            setSseDebug(`html_progress len=${htmlFragment.length}`);
             setCurrentHtml(htmlFragment);
           },
           onDone: (finalHtml) => {
+            setSseDebug(`done len=${finalHtml.length}`);
             setMessages((prev) => {
               const idx = prev.length - 1;
               if (idx >= 0 && prev[idx].role === "assistant") {
@@ -212,6 +253,7 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
             setRoundNum(0);
           },
           onError: (message) => {
+            setSseDebug(`error ${message}`);
             setMessages((prev) => {
               const idx = prev.length - 1;
               if (idx >= 0 && prev[idx].role === "assistant") {
@@ -221,6 +263,10 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
               }
               return prev;
             });
+          },
+          onRawChunk: (chunk) => {
+            // 仅保留最近 400 字符，避免占满页面
+            setSseRawPreview((prev) => (prev + chunk).slice(-400));
           },
         });
       } else {
@@ -233,6 +279,7 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
   // 关闭结果面板
   const handleCloseResult = useCallback(() => {
     reset();
+    inThinkingRef.current = false;
     setHasSubmitted(false);
     setMessages([]);
     setCurrentHtml("");
@@ -255,14 +302,14 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
 
       {/* 双栏布局：左栏对话 + 右栏预览（对话 UI 时） */}
       {hasMessages ? (
-        <div className="grid grid-cols-2 gap-6 mb-6" style={{ minHeight: "calc(100vh - 280px)" }}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6" style={{ minHeight: "calc(100vh - 280px)" }}>
           {/* 左栏：对话消息列表 */}
           <div className="flex flex-col bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
             <div className="flex-1 overflow-y-auto px-4">
               <ChatMessages messages={messages} />
             </div>
             {/* 固定输入栏 */}
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-3 lg:p-4 border-t border-gray-100">
               <ChatInput
                 aiFunction={aiFunction}
                 tags={tags}
@@ -275,9 +322,51 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
 
           {/* 右栏：HTML 实时预览 */}
           <div className="flex flex-col bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100 text-sm text-gray-600">
+            <div className="flex items-center justify-between px-3 lg:px-4 py-2 bg-gray-50 border-b border-gray-100 text-sm text-gray-600">
               <span className="font-medium">HTML 实时预览</span>
-              {roundNum > 0 && <span className="text-xs text-gray-400">第 {roundNum} 轮</span>}
+              <div className="flex items-center gap-2">
+                {roundNum > 0 && <span className="text-xs text-gray-400">第 {roundNum} 轮</span>}
+                {currentHtml && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const win = window.open('', '_blank')
+                        if (win) {
+                          win.document.write(currentHtml)
+                          win.document.close()
+                        }
+                      }}
+                      className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer underline"
+                      title="在新窗口打开"
+                    >
+                      新窗口
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const blob = new Blob([currentHtml], { type: 'text/html' })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = 'game.html'
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      }}
+                      className="text-xs text-green-500 hover:text-green-700 cursor-pointer underline"
+                      title="下载HTML文件"
+                    >
+                      下载
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="px-3 lg:px-4 py-1.5 border-b border-gray-100 text-xs text-gray-500 bg-gray-50/60">
+              SSE 调试：{sseDebug}
+            </div>
+            <div className="px-3 lg:px-4 py-1.5 border-b border-gray-100 text-[11px] text-gray-400 bg-gray-50/40 break-all whitespace-pre-wrap">
+              原始流片段：{sseRawPreview || "（空）"}
             </div>
             {currentHtml ? (
               htmlPreviewCollapsed ? (
@@ -295,7 +384,7 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
                   srcDoc={currentHtml}
                   className="flex-1 w-full bg-white"
                   title="HTML 实时预览"
-                  sandbox="allow-scripts allow-same-origin"
+                  sandbox="allow-scripts allow-forms allow-popups allow-modals"
                 />
               )
             ) : (
@@ -319,7 +408,7 @@ export default function GenerationPage({ aiFunction }: GenerationPageProps) {
           )}
 
           {isLoading && !hasMessages && (
-            <div className="grid grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
                 <div className="inline-flex items-center gap-3">
                   <div className="w-8 h-8 border-3 border-[#0D5C3F]/30 border-t-[#0D5C3F] rounded-full animate-spin" />
